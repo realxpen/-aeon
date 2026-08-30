@@ -1,0 +1,23 @@
+/* AEON — 07 Visual Hierarchy: make the current agent action unmistakable. */
+.mission .content{position:relative}
+.mission .content h1{max-width:900px}
+.mission .kicker{display:inline-flex;align-items:center;gap:8px}
+.mission-live{align-items:start}
+.agent-card{position:relative}
+.agent-card .live-badge{font-weight:700;letter-spacing:.08em}
+.workflow span{position:relative}
+.workflow .done{font-weight:700}
+.event.current{position:relative;padding-left:8px;border-left:2px solid #b8f36b;background:linear-gradient(90deg,rgba(184,243,107,.055),transparent 65%)}
+.event.current b{font-weight:700}
+.constitution-mini{border-top:2px solid rgba(184,243,107,.55)}
+.approval{border-top:2px solid #b8f36b}
+.proposal.approved{box-shadow:0 0 0 1px rgba(184,243,107,.12),0 20px 55px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.16)}
+/* Keep the one thing the human must notice visually dominant. */
+.approval button,.primary-action{font-size:12px;letter-spacing:.04em}
+@media(max-width:760px){
+ .mission .content h1{max-width:none}
+ .event.current{margin-left:-8px;padding-left:8px}
+ .approval{order:-1}
+ .approval button{min-height:50px}
+}
+@media(prefers-reduced-motion:reduce){.event.current{background:rgba(184,243,107,.04)}}
