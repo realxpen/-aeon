@@ -1,0 +1,4 @@
+/* Final WebMCP / judge-demo polish: make the agent story scannable in seconds. */
+.judge-demo-badge{position:fixed;top:14px;right:18px;z-index:9998;display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid rgba(184,243,107,.22);border-radius:999px;background:rgba(10,15,12,.68);color:#b8f36b;font-size:9px;font-weight:800;letter-spacing:.12em;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.judge-demo-badge .dot{width:6px;height:6px;border-radius:50%;background:#b8f36b;box-shadow:0 0 12px rgba(184,243,107,.7)}
+@media(max-width:760px){.judge-demo-badge{top:max(8px,env(safe-area-inset-top));right:10px;font-size:8px}}
