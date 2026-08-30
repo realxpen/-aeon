@@ -1,3 +1,4 @@
+import { getMissionConstitution, MissionConstitution } from './mission-state'
 export type Product={id:string;name:string;category:string;price:number;originalPrice:number;merchant:string;rating:number;performance:number;audio:number;stock:number;negotiable:boolean}
 export const catalog:Product[]=[
 {id:'creator-kit-01',name:'Creator Studio Kit',category:'Creator',price:749000,originalPrice:799000,merchant:'AEON Marketplace',rating:4.9,performance:96,audio:94,stock:8,negotiable:true},
@@ -6,5 +7,13 @@ export const catalog:Product[]=[
 {id:'creator-kit-04',name:'Audio-first Creator Rig',category:'Creator',price:679000,originalPrice:720000,merchant:'AEON Marketplace',rating:4.9,performance:90,audio:99,stock:4,negotiable:true}
 ]
 export function searchCatalog(query:string,maxPrice?:number){const q=query.toLowerCase();return catalog.filter(p=>(!maxPrice||p.price<=maxPrice)&&([p.name,p.category,p.merchant].join(' ').toLowerCase().includes(q)||q.includes('creator'))).sort((a,b)=>b.rating-a.rating)}
-export function negotiate(product:Product,budget:number){if(!product.negotiable)return {acceptedPrice:product.price,saving:0,rounds:0,message:'Merchant does not accept negotiation.'};const ceiling=Math.min(product.price,budget);const floor=Math.max(Math.round(product.originalPrice*.84/1000)*1000,Math.round(product.price*.90/1000)*1000);const accepted=Math.min(ceiling,Math.max(floor,Math.round(product.price*.94/1000)*1000));return {acceptedPrice:accepted,saving:product.price-accepted,rounds:2,message:`AEON negotiated within the mission constitution and secured ₦${(product.price-accepted).toLocaleString()} savings.`}}
+export type NegotiationResult={acceptedPrice:number;saving:number;rounds:number;message:string;status:'approved'|'rejected';reason?:string}
+export function negotiate(product:Product,budget:number,constitution:MissionConstitution=getMissionConstitution()):NegotiationResult{
+ if(!constitution.canNegotiate)return {acceptedPrice:product.price,saving:0,rounds:0,status:'rejected',message:'AEON blocked this negotiation.',reason:'CONSTITUTION_NEGOTIATION_DISABLED'}
+ if(product.price>constitution.budget||budget>constitution.budget)return {acceptedPrice:product.price,saving:0,rounds:0,status:'rejected',message:'AEON blocked this offer because it exceeds the mission budget.',reason:'CONSTITUTION_BUDGET_EXCEEDED'}
+ if(!product.negotiable)return {acceptedPrice:product.price,saving:0,rounds:0,status:'rejected',message:'Merchant does not accept negotiation.',reason:'MERCHANT_FIXED_PRICE'}
+ const ceiling=Math.min(product.price,budget,constitution.budget);const floor=Math.max(Math.round(product.originalPrice*.84/1000)*1000,Math.round(product.price*.90/1000)*1000);const accepted=Math.min(ceiling,Math.max(floor,Math.round(product.price*.94/1000)*1000))
+ if(accepted>constitution.budget)return {acceptedPrice:accepted,saving:0,rounds:2,status:'rejected',message:'AEON refused to propose a deal above the constitutional budget.',reason:'PROPOSED_PRICE_ABOVE_LIMIT'}
+ return {acceptedPrice:accepted,saving:product.price-accepted,rounds:2,status:'approved',message:`AEON negotiated within the mission constitution and secured ₦${(product.price-accepted).toLocaleString()} savings.`}
+}
 export function rankForMission(products:Product[],priorities:string[]){return [...products].map(p=>({...p,matchScore:Math.round(((priorities.includes('performance')?p.performance:80)*.4+(priorities.includes('audio quality')?p.audio:80)*.4+p.rating*20*.2))})).sort((a,b)=>b.matchScore-a.matchScore)}
