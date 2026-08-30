@@ -1,0 +1,7 @@
+type Tool = { name:string; description:string; inputSchema:Record<string,unknown>; execute:(input:any)=>Promise<unknown> }
+export const aeonTools: Tool[] = [
+{name:'create_mission',description:'Create an AEON agent mission with authority boundaries.',inputSchema:{type:'object',properties:{goal:{type:'string'},budget:{type:'number'},canNegotiate:{type:'boolean'},purchaseRequiresApproval:{type:'boolean'}},required:['goal','budget']},execute:async(input)=>({ok:true,missionId:'mission_demo_001',...input,status:'created'})},
+{name:'search_products',description:'Search products matching an active AEON mission.',inputSchema:{type:'object',properties:{query:{type:'string'},maxPrice:{type:'number'}},required:['query']},execute:async(input)=>({query:input.query,maxPrice:input.maxPrice??null,results:[{id:'creator-kit-01',name:'Creator Studio Kit',price:749000,matchScore:0.94},{id:'creator-kit-02',name:'Pro Creator Stack',price:895000,matchScore:0.91}]})},
+{name:'request_purchase_approval',description:'Present a proposed purchase to the human when approval is required.',inputSchema:{type:'object',properties:{productId:{type:'string'},price:{type:'number'},reason:{type:'string'}},required:['productId','price']},execute:async(input)=>({status:'approval_required',humanDecision:true,...input})}
+]
+export function registerWebMCP(){const mc=(navigator as any).modelContext;if(!mc?.registerTool)return false;for(const tool of aeonTools)mc.registerTool(tool);return true}
