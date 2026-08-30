@@ -1,0 +1,25 @@
+/* AEON — 06 Mobile Browser Compatibility */
+:root{--aeon-vh:100vh}
+@supports (height:100dvh){:root{--aeon-vh:100dvh}}
+html{min-height:100%;-webkit-text-size-adjust:100%;text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+body{min-height:var(--aeon-vh);margin:0;overscroll-behavior-x:none;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+#root{min-height:var(--aeon-vh);padding-bottom:env(safe-area-inset-bottom)}
+button,a,[role="button"]{touch-action:manipulation;-webkit-user-select:none;user-select:none}
+input,textarea,select{font-size:16px;max-width:100%;-webkit-appearance:none;appearance:none}
+textarea{resize:vertical}
+.activity-stream,.firewall-events,.conversation,.agent-conversation{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+@supports (-webkit-touch-callout:none){
+  .shell,.mission-shell,.mission-page,.mission-control,.dashboard,.app-shell{padding-top:max(16px,env(safe-area-inset-top))!important;padding-bottom:max(16px,env(safe-area-inset-bottom))!important}
+}
+@media (max-width:760px){
+  html,body{width:100%;min-width:0}
+  .approval-card,.checkpoint-card,.deal-card{bottom:max(12px,env(safe-area-inset-bottom));}
+  .nav{padding-left:max(16px,env(safe-area-inset-left))!important;padding-right:max(16px,env(safe-area-inset-right))!important}
+}
+@media (max-width:380px){
+  .mission-shell,.mission-page,.mission-control,.dashboard,.app-shell{padding-left:max(10px,env(safe-area-inset-left))!important;padding-right:max(10px,env(safe-area-inset-right))!important}
+}
+@media (orientation:landscape) and (max-height:500px){
+  .hero{padding-top:24px!important;padding-bottom:24px!important}
+  .activity-stream,.firewall-events{max-height:42vh}
+}
