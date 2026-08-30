@@ -1,0 +1,47 @@
+/* AEON responsive polish — layered over the existing visual system. */
+
+*,*::before,*::after{box-sizing:border-box}
+html,body,#root{max-width:100%;overflow-x:hidden}
+img,svg,video{max-width:100%;height:auto}
+button,input,textarea,select{font:inherit}
+button{touch-action:manipulation}
+
+@media (max-width:1100px){
+  .mission-layout,.mission-grid,.control-grid,.dashboard-grid{grid-template-columns:minmax(0,1fr)!important}
+  .sidebar,.mission-sidebar{position:static!important;width:auto!important}
+  .journey-panel,.firewall-panel,.marketplace-panel{min-width:0!important}
+}
+
+@media (max-width:760px){
+  body{font-size:15px}
+  .mission-shell,.mission-page,.mission-control,.dashboard,.app-shell{padding-left:16px!important;padding-right:16px!important}
+  .mission-header,.topbar,.page-header{gap:12px!important;flex-wrap:wrap}
+  .mission-header h1,.page-header h1{font-size:clamp(28px,9vw,42px)!important}
+  .journey-header,.journey-toolbar,.firewall-header,.activity-header{align-items:flex-start!important;flex-wrap:wrap}
+  .journey-steps,.agent-steps,.workflow-steps{display:flex!important;overflow-x:auto!important;gap:8px!important;padding-bottom:6px;scrollbar-width:none}
+  .journey-steps::-webkit-scrollbar,.agent-steps::-webkit-scrollbar,.workflow-steps::-webkit-scrollbar{display:none}
+  .journey-step,.agent-step,.workflow-step{flex:0 0 auto!important;min-width:92px}
+  .activity-stream,.firewall-events{max-height:52vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .activity-event,.firewall-event{display:grid!important;grid-template-columns:auto minmax(0,1fr)!important;gap:10px!important;padding:13px 0!important}
+  .activity-event p,.firewall-event p,.event-detail{overflow-wrap:anywhere}
+  .conversation,.agent-conversation{width:100%!important}
+  .chat-bubble,.agent-message{max-width:92%!important}
+  .marketplace-grid,.product-grid{grid-template-columns:1fr!important}
+  .product-card{min-width:0!important}
+  .approval-card,.checkpoint-card,.deal-card{position:sticky;bottom:12px;z-index:5}
+  .approval-card button,.checkpoint-card button,.deal-card button,.primary-action,.secondary-action{min-height:48px!important;width:100%!important}
+  .action-row,.button-row,.cta-row{display:grid!important;grid-template-columns:1fr!important;gap:10px!important}
+  .constitution-card,.firewall-card,.tool-card{padding:16px!important}
+  .constitution-stats{grid-template-columns:1fr 1fr!important}
+}
+
+@media (max-width:420px){
+  .mission-shell,.mission-page,.mission-control,.dashboard,.app-shell{padding-left:12px!important;padding-right:12px!important}
+  .constitution-stats{grid-template-columns:1fr!important}
+  .chat-bubble,.agent-message{max-width:96%!important}
+  .eyebrow{font-size:9px!important;letter-spacing:.1em!important}
+}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+}
