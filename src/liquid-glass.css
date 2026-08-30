@@ -1,0 +1,30 @@
+:root{--glass-bg:rgba(18,23,31,.58);--glass-bg-strong:rgba(20,26,35,.72);--glass-border:rgba(255,255,255,.10);--glass-highlight:rgba(255,255,255,.16);--glass-shadow:0 24px 70px rgba(0,0,0,.28)}
+
+/* AEON glass: translucent surfaces, soft inner highlights, and restrained blur. */
+.panel,.agent-card,.constitution-mini,.approval,.agent-conversation,.journey-scene,.journey-deal,.journey-checkpoint,.agent-console,.marketplace-view,.constitution-banner,.product-card,.deal-panel,.tool-detail,.tool-list,.firewall,.firewall-rule,.journey-empty-state,.mission-input{
+ background:linear-gradient(145deg,var(--glass-bg-strong),rgba(9,13,19,.54));
+ border-color:var(--glass-border);
+ box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-highlight);
+ backdrop-filter:blur(22px) saturate(135%);
+ -webkit-backdrop-filter:blur(22px) saturate(135%);
+}
+.panel,.agent-card,.constitution-mini,.approval,.agent-console,.marketplace-view,.firewall,.product-card,.deal-panel{border-radius:20px}
+.agent-card,.constitution-mini,.approval,.firewall,.agent-console,.marketplace-view,.product-card,.deal-panel{position:relative;overflow:hidden}
+.panel::before,.agent-card::before,.constitution-mini::before,.approval::before,.firewall::before,.agent-console::before,.marketplace-view::before,.product-card::before,.deal-panel::before{
+ content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;background:linear-gradient(120deg,rgba(255,255,255,.09),transparent 28%,transparent 72%,rgba(255,255,255,.025));opacity:.7
+}
+.panel:hover,.agent-card:hover,.product-card:hover,.deal-panel:hover{box-shadow:0 28px 80px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.17);border-color:rgba(255,255,255,.14)}
+.nav{background:rgba(5,7,11,.48);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+.message-bubble,.typing-bubble,.chat-bubble,.firewall-rule,.empty-explanation,.tool-detail,.tool-list,.journey-action,.journey-agent{
+ background:rgba(17,22,30,.58);border-color:rgba(255,255,255,.09);box-shadow:0 10px 30px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.08);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)
+}
+.message-bubble{border-radius:18px 18px 18px 6px}
+.typing-bubble{border-radius:18px 18px 18px 6px}
+.approval button,.continue,.primary,.negotiate,.approval-link,.primary-action{border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.22);transition:transform .2s ease,box-shadow .2s ease,filter .2s ease}
+.approval button:hover,.continue:hover,.primary:hover,.negotiate:hover,.approval-link:hover,.primary-action:hover{box-shadow:0 14px 36px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.28)}
+input,.mission-input{border-radius:16px!important}
+.product-card{background:linear-gradient(145deg,rgba(21,27,36,.68),rgba(10,14,20,.56));text-align:left}
+.constitution .panel,.journey-scene,.journey-deal,.journey-checkpoint{overflow:hidden}
+@supports not ((backdrop-filter:blur(1px))){.panel,.agent-card,.constitution-mini,.approval,.agent-console,.marketplace-view,.firewall,.product-card,.deal-panel{background:#10151d}}
+@media(max-width:760px){.panel,.agent-card,.constitution-mini,.approval,.agent-console,.marketplace-view,.product-card,.deal-panel{border-radius:17px}.panel,.agent-card,.constitution-mini,.approval,.agent-console,.marketplace-view,.firewall,.product-card,.deal-panel{box-shadow:0 18px 45px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.12)}}
+@media(prefers-reduced-motion:reduce){.panel:hover,.agent-card:hover,.product-card:hover,.deal-panel:hover{box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-highlight)}}
