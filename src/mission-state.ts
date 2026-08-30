@@ -1,0 +1,6 @@
+export type MissionConstitution={goal:string;budget:number;canNegotiate:boolean;purchaseRequiresApproval:boolean;priorities:string[]}
+const KEY='aeon:active-mission'
+const defaults:MissionConstitution={goal:'Build the best creator setup under ₦1,000,000.',budget:1000000,canNegotiate:true,purchaseRequiresApproval:true,priorities:['performance','audio quality']}
+export function getMissionConstitution():MissionConstitution{try{const raw=localStorage.getItem(KEY);return raw?{...defaults,...JSON.parse(raw)}:defaults}catch{return defaults}}
+export function saveMissionConstitution(value:Partial<MissionConstitution>){const next={...getMissionConstitution(),...value};localStorage.setItem(KEY,JSON.stringify(next));window.dispatchEvent(new CustomEvent('aeon:mission-updated',{detail:next}));return next}
+export function subscribeMissionConstitution(setter:(v:MissionConstitution)=>void){const onStorage=()=>setter(getMissionConstitution());const onCustom=(e:Event)=>setter((e as CustomEvent<MissionConstitution>).detail);window.addEventListener('storage',onStorage);window.addEventListener('aeon:mission-updated',onCustom);return()=>{window.removeEventListener('storage',onStorage);window.removeEventListener('aeon:mission-updated',onCustom)}}
