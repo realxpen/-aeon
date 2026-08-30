@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import './agent-journey.css'
 import type { Product } from './marketplace'
 
 type Props={phase:string; running:boolean; approved:boolean; products:Product[]; proposal:{product:Product;deal:{acceptedPrice:number;saving:number;rounds:number}}|null}
