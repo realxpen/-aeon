@@ -1,6 +1,7 @@
 import React,{useEffect} from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
+import './responsive.css'
 import Mission from './mission'
 import MarketplaceView from './marketplace-view'
 import {registerWebMCP} from './webmcp'
