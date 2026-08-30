@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { aeonTools } from './webmcp'
+import './agent-console-polish.css'
 
 export default function AgentConsole(){
  const [selected,setSelected]=useState(aeonTools[0].name)
