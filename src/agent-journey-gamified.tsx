@@ -6,204 +6,36 @@ import ProductDetail from './product-detail'
 import './phase16-gamified-journey.css'
 import './phase16-gamified-journey-overrides.css'
 
-type Basket = { products: Product[]; deals: NegotiationResult[]; total: number; saving: number }
-type Props = { phase: string; running: boolean; approved: boolean; products: Product[]; proposal: Basket | null; goal?: string; budget?: number }
-
-const stages = [['SEARCHING', 'SEARCH'], ['ANALYZING', 'EVALUATE'], ['NEGOTIATING', 'NEGOTIATE'], ['CONSTITUTION CHECK', 'GOVERN'], ['HUMAN APPROVAL', 'APPROVAL'], ['EXECUTION RELEASED', 'EXECUTE']] as const
-const descriptions = ['Searching the marketplace', 'Evaluating mission-fit options', 'Negotiating with seller agents', 'Checking your constitution', 'Review and approve the proposed deal', 'Executing the approved transaction']
-
-function phaseIndex(value: string) {
-  const index = stages.findIndex(([name]) => name === value)
-  return index >= 0 ? index : value === 'NO COMPLIANT DEAL' ? 3 : 0
-}
-
-function playTick() {
-  try {
-    const Audio = window.AudioContext || (window as any).webkitAudioContext
-    if (!Audio) return
-    const context = new Audio()
-    const oscillator = context.createOscillator()
-    const gain = context.createGain()
-    oscillator.type = 'sine'
-    oscillator.frequency.setValueAtTime(560, context.currentTime)
-    oscillator.frequency.exponentialRampToValueAtTime(760, context.currentTime + 0.07)
-    gain.gain.setValueAtTime(0.0001, context.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.018, context.currentTime + 0.012)
-    oscillator.connect(gain)
-    gain.connect(context.destination)
-    oscillator.start()
-    oscillator.stop(context.currentTime + 0.12)
-  } catch {}
-}
-
-type CardProps = { index: number; title: string; state: string; current: boolean; depth: number; children?: ReactNode; onOpen: () => void }
-function JourneyCard({ index, title, state, current, depth, children, onOpen }: CardProps) {
-  return <article className={`stage-stack-card ${current ? 'current' : ''} ${state === 'done' ? 'completed' : ''} stack-depth-${Math.min(depth, 5)}`} role="listitem">
-    <button className="stage-card-head" onClick={() => { playTick(); onOpen() }} aria-expanded={current}>
-      <span className="stage-number">{state === 'done' ? '✓' : String(index + 1).padStart(2, '0')}</span>
-      <span className="stage-copy"><span>STAGE {String(index + 1).padStart(2, '0')}</span><strong>{title}</strong></span>
-      <span className="stage-state">{state === 'done' ? 'DONE' : current ? 'ACTIVE' : 'READY'}</span>
-      <span className="stage-chevron">›</span>
-    </button>
-    {current && <div className="stage-card-body">{children}</div>}
-  </article>
-}
-
-export default function AgentJourneyGamified({ phase, running, approved, products, proposal, budget = 0 }: Props) {
-  const target = approved ? 5 : phaseIndex(phase)
-  const [open, setOpen] = useState(0)
-  const [detail, setDetail] = useState<{ product: Product; deal?: NegotiationResult } | null>(null)
-  const [basketReview, setBasketReview] = useState(false)
-  const [declined, setDeclined] = useState(false)
-  const [working, setWorking] = useState<Basket | null>(proposal)
-  const [negotiationProduct, setNegotiationProduct] = useState(0)
-  const [negotiationMessage, setNegotiationMessage] = useState(-1)
-  const [negotiationDone, setNegotiationDone] = useState(false)
-  const [negotiationSession, setNegotiationSession] = useState<{ product: Product; deal: NegotiationResult }[]>([])
-  const previousRunning = useRef(false)
-
-  useEffect(() => {
-    if (running && !previousRunning.current) {
-      setWorking(proposal)
-      setDeclined(false)
-      setBasketReview(false)
-      setDetail(null)
-      setNegotiationProduct(0)
-      setNegotiationMessage(-1)
-      setNegotiationDone(false)
-      const session = proposal?.products.map((product, index) => ({ product, deal: proposal.deals[index] })).filter(item => Boolean(item.deal?.transcript?.length)) as { product: Product; deal: NegotiationResult }[] | undefined
-      setNegotiationSession(session ?? [])
-      setOpen(0)
-    }
-    previousRunning.current = running
-  }, [running, proposal])
-
-  useEffect(() => {
-    if (!running || negotiationSession.length > 0 || !proposal) return
-    const session = proposal.products.map((product, index) => ({ product, deal: proposal.deals[index] })).filter(item => Boolean(item.deal?.transcript?.length)) as { product: Product; deal: NegotiationResult }[]
-    setNegotiationSession(session)
-  }, [running, proposal, negotiationSession.length])
-
-  const currentBasket = working ?? proposal
-  const reviewProducts = currentBasket?.products ?? products
-
-  const alternatives = useMemo(() => {
-    const ids = new Set(reviewProducts.map(product => product.id))
-    const categories = new Set(reviewProducts.map(product => product.category))
-    return catalog.filter(product => !ids.has(product.id) && categories.has(product.category) && (!budget || product.price <= budget)).sort((a, b) => b.rating - a.rating).slice(0, 5)
-  }, [reviewProducts, budget])
-
-  useEffect(() => {
-    if (approved || declined || open >= 2) return
-    if (target > open) setOpen(value => Math.min(value + 1, 2))
-  }, [target, open, approved, declined])
-
-  useEffect(() => {
-    if (open !== 2 || negotiationDone || negotiationSession.length === 0) return
-    const thread = negotiationSession[negotiationProduct]
-    if (!thread) return
-    const transcript = thread.deal.transcript
-    if (negotiationMessage < transcript.length - 1) {
-      const timer = window.setTimeout(() => {
-        setNegotiationMessage(value => value + 1)
-        playTick()
-      }, 1800)
-      return () => window.clearTimeout(timer)
-    }
-    if (negotiationProduct < negotiationSession.length - 1) {
-      const timer = window.setTimeout(() => {
-        setNegotiationProduct(value => value + 1)
-        setNegotiationMessage(-1)
-        playTick()
-      }, 1200)
-      return () => window.clearTimeout(timer)
-    }
-    setNegotiationDone(true)
-  }, [open, negotiationProduct, negotiationMessage, negotiationSession, negotiationDone])
-
-  useEffect(() => {
-    if (open === 2 && negotiationDone && !approved && !declined) setOpen(3)
-  }, [open, negotiationDone, approved, declined])
-
-  useEffect(() => {
-    if (open !== 3 || approved || declined) return
-    if (phase === 'HUMAN APPROVAL') setOpen(4)
-  }, [phase, open, approved, declined])
-
-  useEffect(() => {
-    if (approved && open !== 5) setOpen(5)
-  }, [approved, open])
-
-  const replaceProduct = (oldId: string, next: Product) => {
-    if (!currentBasket) return
-    const index = currentBasket.products.findIndex(product => product.id === oldId)
-    if (index < 0) return
-    const deal = negotiate(next, budget)
-    const ps = [...currentBasket.products]; const ds = [...currentBasket.deals]
-    ps[index] = next; ds[index] = deal
-    setWorking({ products: ps, deals: ds, total: ds.reduce((s, d) => s + d.acceptedPrice, 0), saving: ds.reduce((s, d) => s + d.saving, 0) })
-    playTick()
-  }
-
-  const removeProduct = (id: string) => {
-    if (!currentBasket) return
-    const index = currentBasket.products.findIndex(product => product.id === id)
-    if (index < 0) return
-    const ps = currentBasket.products.filter(product => product.id !== id)
-    const ds = currentBasket.deals.filter((_, i) => i !== index)
-    setWorking({ products: ps, deals: ds, total: ds.reduce((s, d) => s + d.acceptedPrice, 0), saving: ds.reduce((s, d) => s + d.saving, 0) })
-    playTick()
-  }
-
-  const addAlternative = (product: Product) => {
-    const deal = negotiate(product, budget)
-    const ps = [...(currentBasket?.products ?? []), product]; const ds = [...(currentBasket?.deals ?? []), deal]
-    setWorking({ products: ps, deals: ds, total: ds.reduce((s, d) => s + d.acceptedPrice, 0), saving: ds.reduce((s, d) => s + d.saving, 0) })
-    playTick()
-  }
-
-  const openProduct = (product: Product) => {
-    const index = currentBasket?.products.findIndex(item => item.id === product.id) ?? -1
-    setDetail({ product, deal: index >= 0 ? currentBasket?.deals[index] : undefined })
-    playTick()
-  }
-
-  const approve = () => { playTick(); window.dispatchEvent(new CustomEvent('aeon:approve-mission', { detail: working ?? proposal })) }
-  const decline = () => { playTick(); setDeclined(true); setOpen(4); window.dispatchEvent(new CustomEvent('aeon:decline-mission', { detail: working ?? proposal })) }
-
-  const visibleTranscript = negotiationSession[negotiationProduct]?.deal.transcript.slice(0, Math.max(0, negotiationMessage + 1)) ?? []
-
-  return <section className="gamified-journey">
-    <div className="journey-top">
-      <div><span className="journey-kicker">AEON · AGENT JOURNEY</span><h2>{approved ? 'Execution released.' : declined ? 'Purchase not approved.' : phase === 'NO COMPLIANT DEAL' ? 'Mission paused.' : running ? 'Agent is working…' : 'Deal ready.'}</h2><p>{descriptions[open] ?? 'Agent journey'}</p></div>
-      <div className="journey-signal"><span className="journey-orb" />{open === 4 && !approved && !declined ? 'YOUR DECISION' : declined ? 'DECLINED' : running ? 'LIVE' : 'OBSERVING'}</div>
-    </div>
-
-    <div className="stage-stack" role="list">
-      {stages.map(([phaseName, label], index) => {
-        const done = index < open || (index === 5 && approved)
-        const current = index === open
-        const depth = Math.min(Math.abs(index - open), 5)
-        const locked = open === 2 && !negotiationDone && index !== 2
-        return <JourneyCard key={phaseName} index={index} title={label} state={done ? 'done' : current ? 'active' : 'ready'} current={current} depth={depth} onOpen={() => {
-          if (locked) return
-          setOpen(index)
-        }}>
-          {index === 0 && <><p>AEON is scanning the connected marketplace for products that match the mission.</p><div className="search-pills">{products.slice(0, 5).map(product => <button className="search-pill" key={product.id} onClick={() => openProduct(product)}><span className="mini-orb">✦</span><div><b>{product.name}</b><small>{product.category} · ₦{product.price.toLocaleString()}</small></div></button>)}</div></>}
-          {index === 1 && <><p>Comparing mission fit, price, availability and your stated priorities.</p><div className="thinking-bars"><i/><i/><i/></div></>}
-          {index === 2 && <><p>AEON negotiates separately with each seller agent. Watch the conversation unfold in real time.</p>{negotiationSession.length ? <div className="negotiation-live-stage"><div className="negotiation-live-meta"><span>SELLER {negotiationProduct + 1} OF {negotiationSession.length}</span><b>{negotiationSession[negotiationProduct]?.product.name}</b><i>{negotiationDone ? 'CONVERSATION COMPLETE' : 'LIVE CONVERSATION'}</i></div><div className="live-chat-window">{visibleTranscript.map((message, j) => <div className={`thread-message live-message ${message.speaker.toLowerCase().replace(/\s+/g, '-')} ${j === visibleTranscript.length - 1 ? 'message-new' : ''}`} key={`${message.round}-${j}`}><small>{message.speaker} · ROUND {message.round}</small><p>{message.text}</p>{message.price !== undefined && <b>₦{message.price.toLocaleString()}</b>}</div>)}{!negotiationDone && <div className="typing-indicator"><span/><span/><span/>{negotiationMessage % 2 === 0 ? 'Seller agent is typing…' : 'AEON is typing…'}</div>}</div><div className="negotiation-progress">{negotiationSession.map((thread, j) => <span key={thread.product.id} className={j < negotiationProduct ? 'done' : j === negotiationProduct ? 'active' : ''}>{j + 1}</span>)}</div></div> : <div className="chat-preview"><div className="chat-bubble">Waiting for seller-agent negotiation to start…</div></div>}</>}
-          {index === 3 && <><p>Checking every proposed total against your mission authority before asking for permission.</p><div className="offer-line"><span>CONSTITUTION</span><strong>{currentBasket && budget > 0 && currentBasket.total > budget ? 'BLOCKED' : 'COMPLIANT'}</strong></div></>}
-          {index === 4 && <>{declined ? <div className="decline-state"><strong>Deal declined by you.</strong><p>AEON has not authorized or executed any purchase.</p></div> : <><p>AEON has stopped. Review the exact recommendation. You can remove items, swap alternatives, inspect products, or decline. Nothing is purchased until you approve.</p><div className="review-summary"><strong>{reviewProducts.length === 1 ? 'Review 1 product' : `${reviewProducts.length} products in proposed basket`}</strong><small>{reviewProducts.length > 1 ? 'Remove, replace or inspect any item before approving.' : 'Inspect the primary recommendation or switch to an alternative.'}</small></div><div className="journey-actions">{reviewProducts.length > 1 && <button className="tactile-button" onClick={() => setBasketReview(true)}>Review basket</button>}{reviewProducts.length === 1 && <button className="tactile-button" onClick={() => openProduct(reviewProducts[0])}>Review product</button>}<button className="tactile-button primary-action" onClick={approve}>Approve deal →</button><button className="tactile-button danger-action" onClick={decline}>Don't approve</button></div></>}</>}
-          {index === 5 && <><p>The approved proposal is authorized for execution.</p><div className="offer-line"><span>EXECUTION</span><strong>{approved ? 'RELEASED' : 'LOCKED'}</strong></div></>}
-        </JourneyCard>
-      })}
-    </div>
-
-    <div className="stack-nav" aria-label="Journey navigation">{stages.map(([, label], index) => <button key={label} className={index === open ? 'active' : ''} onClick={() => { if (open === 2 && !negotiationDone && index !== 2) return; playTick(); setOpen(index) }} aria-label={`View ${label}`}>{index + 1}</button>)}</div>
-    <div className="stack-foot">The active stage is centered and focused. The next stages remain visible behind it; tap a visible card to peek.</div>
-
-    {detail && <ProductDetail product={detail.product} deal={detail.deal} alternatives={alternatives} onSelectAlternative={product => { const oldId = detail.product.id; replaceProduct(oldId, product); setDetail({ product, deal: negotiate(product, budget) }) }} onBack={() => setDetail(null)} onApprove={open === 4 && !declined ? approve : undefined} />}
-
-    {basketReview && currentBasket && <div className="basket-review-page" role="dialog" aria-modal="true"><div className="basket-review-shell"><header className="basket-review-head"><button className="detail-back" onClick={() => setBasketReview(false)}>← Back to mission</button><span className="journey-kicker">AEON · BASKET REVIEW</span></header><div className="basket-review-content"><div className="basket-review-hero"><span className="journey-kicker">PROPOSED BASKET</span><h1>{currentBasket.products.length} {currentBasket.products.length === 1 ? 'product' : 'products'}</h1><p>This is your editable purchase proposal. Nothing is authorized yet.</p></div><div className="basket-review-list">{currentBasket.products.map((product, index) => <div className="basket-review-row" key={product.id}><button className="basket-row-main" onClick={() => { setBasketReview(false); openProduct(product) }}><span>{String(index + 1).padStart(2, '0')}</span><div><b>{product.name}</b><small>{product.category} · {product.merchant}</small></div><strong>₦{currentBasket.deals[index]?.acceptedPrice.toLocaleString() ?? product.price.toLocaleString()}</strong><i>›</i></button><button className="basket-remove" onClick={() => removeProduct(product.id)} aria-label={`Remove ${product.name}`}>Remove</button><div className="basket-alts">{catalog.filter(alternative => alternative.category === product.category && alternative.id !== product.id && !currentBasket.products.some(item => item.id === alternative.id) && (!budget || alternative.price <= budget)).slice(0, 3).map(alternative => <button key={alternative.id} onClick={() => replaceProduct(product.id, alternative)}>Switch to {alternative.name} · ₦{alternative.price.toLocaleString()}</button>)}</div></div>)}</div>{alternatives.length > 0 && <section className="basket-add"><span className="journey-kicker">AVAILABLE ALTERNATIVES</span><h3>Add another option</h3><div>{alternatives.map(alternative => <button key={alternative.id} onClick={() => addAlternative(alternative)}><b>{alternative.name}</b><small>₦{alternative.price.toLocaleString()} · ★ {alternative.rating}</small></button>)}</div></section>}<div className="basket-review-total"><span>Current total</span><strong>₦{currentBasket.total.toLocaleString()}</strong>{currentBasket.saving > 0 && <small>Saving ₦{currentBasket.saving.toLocaleString()}</small>}</div><div className="journey-actions"><button className="tactile-button" onClick={() => setBasketReview(false)}>Keep reviewing</button><button className="tactile-button primary-action" disabled={currentBasket.products.length === 0 || Boolean(budget && currentBasket.total > budget)} onClick={approve}>Approve deal →</button><button className="tactile-button danger-action" onClick={() => { setBasketReview(false); decline() }}>Don't approve</button></div></div></div></div>}
-  </section>
+type Basket={products:Product[];deals:NegotiationResult[];total:number;saving:number}
+type Props={phase:string;running:boolean;approved:boolean;products:Product[];proposal:Basket|null;goal?:string;budget?:number}
+const stages=[['SEARCHING','SEARCH'],['ANALYZING','EVALUATE'],['NEGOTIATING','NEGOTIATE'],['CONSTITUTION CHECK','GOVERN'],['HUMAN APPROVAL','APPROVAL'],['EXECUTION RELEASED','EXECUTE']] as const
+const descriptions=['Searching the marketplace','Evaluating mission-fit options','Negotiating with seller agents','Checking your constitution','Review and approve the proposed deal','Executing the approved transaction']
+function tick(){try{const C=window.AudioContext||(window as any).webkitAudioContext;if(!C)return;const c=new C();const o=c.createOscillator();const g=c.createGain();o.type='sine';o.frequency.value=620;g.gain.value=.012;o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+.08)}catch{}}
+type CardProps={index:number;title:string;state:string;current:boolean;depth:number;children?:ReactNode}
+function JourneyCard({index,title,state,current,depth,children}:CardProps){return <article className={`stage-stack-card ${current?'current':''} ${state==='done'?'completed':''} stack-depth-${Math.min(depth,5)}`} role="listitem"><div className="stage-card-head"><span className="stage-number">{state==='done'?'✓':String(index+1).padStart(2,'0')}</span><span className="stage-copy"><span>STAGE {String(index+1).padStart(2,'0')}</span><strong>{title}</strong></span><span className="stage-state">{state==='done'?'DONE':current?'ACTIVE':'READY'}</span><span className="stage-chevron">›</span></div>{current&&<div className="stage-card-body">{children}</div>}</article>}
+export default function AgentJourneyGamified({phase,running,approved,products,proposal,budget=0}:Props){
+ const [open,setOpen]=useState(0);const [detail,setDetail]=useState<{product:Product;deal?:NegotiationResult}|null>(null);const [basketReview,setBasketReview]=useState(false);const [declined,setDeclined]=useState(false);const [working,setWorking]=useState<Basket|null>(proposal);const [negotiationProduct,setNegotiationProduct]=useState(0);const [negotiationMessage,setNegotiationMessage]=useState(-1);const [negotiationDone,setNegotiationDone]=useState(false);const [session,setSession]=useState<{product:Product;deal:NegotiationResult}[]>([]);const previousRunning=useRef(false)
+ const currentBasket=working??proposal;const reviewProducts=currentBasket?.products??products
+ const alternatives=useMemo(()=>{const ids=new Set(reviewProducts.map(p=>p.id));const cats=new Set(reviewProducts.map(p=>p.category));return catalog.filter(p=>!ids.has(p.id)&&cats.has(p.category)&&(!budget||p.price<=budget)).sort((a,b)=>b.rating-a.rating).slice(0,6)},[reviewProducts,budget])
+ useEffect(()=>{if(running&&!previousRunning.current){setWorking(proposal);setDeclined(false);setBasketReview(false);setDetail(null);setNegotiationProduct(0);setNegotiationMessage(-1);setNegotiationDone(false);setSession([]);setOpen(0)}previousRunning.current=running},[running,proposal])
+ useEffect(()=>{if(phase==='SEARCHING')setOpen(0);else if(phase==='ANALYZING')setOpen(1);else if(phase==='NEGOTIATING')setOpen(2);else if(phase==='CONSTITUTION CHECK'&&negotiationDone)setOpen(3);else if(phase==='HUMAN APPROVAL'&&negotiationDone)setOpen(4);else if(phase==='EXECUTION RELEASED')setOpen(5)},[phase,negotiationDone])
+ useEffect(()=>{if(phase!=='NEGOTIATING'||!products.length||session.length)return;const source=proposal?.products?.length?proposal.products:products;const deals=proposal?.deals??[];setSession(source.map((product,i)=>({product,deal:deals[i]??negotiate(product,budget)})).filter(x=>x.deal?.transcript?.length))},[phase,products,proposal,budget,session.length])
+ useEffect(()=>{if(open!==2||negotiationDone||!session.length)return;const thread=session[negotiationProduct];if(!thread){setNegotiationDone(true);return}const transcript=thread.deal.transcript;if(negotiationMessage<transcript.length-1){const timer=window.setTimeout(()=>{setNegotiationMessage(v=>v+1);tick()},1800);return()=>window.clearTimeout(timer)}if(negotiationProduct<session.length-1){const timer=window.setTimeout(()=>{setNegotiationProduct(v=>v+1);setNegotiationMessage(-1);tick()},900);return()=>window.clearTimeout(timer)}setNegotiationDone(true)},[open,negotiationProduct,negotiationMessage,session,negotiationDone])
+ useEffect(()=>{if(open===2&&negotiationDone&&!declined&&!approved&&phase==='CONSTITUTION CHECK')setOpen(3)},[open,negotiationDone,declined,approved,phase]);useEffect(()=>{if(approved)setOpen(5)},[approved])
+ const replaceProduct=(oldId:string,next:Product)=>{if(!currentBasket)return;const i=currentBasket.products.findIndex(p=>p.id===oldId);if(i<0)return;const deal=negotiate(next,budget);const ps=[...currentBasket.products];const ds=[...currentBasket.deals];ps[i]=next;ds[i]=deal;setWorking({products:ps,deals:ds,total:ds.reduce((s,d)=>s+d.acceptedPrice,0),saving:ds.reduce((s,d)=>s+d.saving,0)});setDetail({product:next,deal});tick()}
+ const removeProduct=(id:string)=>{if(!currentBasket)return;const i=currentBasket.products.findIndex(p=>p.id===id);if(i<0)return;const ps=currentBasket.products.filter(p=>p.id!==id);const ds=currentBasket.deals.filter((_,j)=>j!==i);setWorking({products:ps,deals:ds,total:ds.reduce((s,d)=>s+d.acceptedPrice,0),saving:ds.reduce((s,d)=>s+d.saving,0)});tick()}
+ const addAlternative=(p:Product)=>{const deal=negotiate(p,budget);const ps=[...(currentBasket?.products??[]),p];const ds=[...(currentBasket?.deals??[]),deal];setWorking({products:ps,deals:ds,total:ds.reduce((s,d)=>s+d.acceptedPrice,0),saving:ds.reduce((s,d)=>s+d.saving,0)});tick()}
+ const openProduct=(p:Product)=>{const i=currentBasket?.products.findIndex(x=>x.id===p.id)??-1;setDetail({product:p,deal:i>=0?currentBasket?.deals[i]:undefined});tick()};const approve=()=>{tick();window.dispatchEvent(new CustomEvent('aeon:approve-mission',{detail:working??proposal}))};const decline=()=>{tick();setDeclined(true);setOpen(4);window.dispatchEvent(new CustomEvent('aeon:decline-mission',{detail:working??proposal}))};const visible=session[negotiationProduct]?.deal.transcript.slice(0,Math.max(0,negotiationMessage+1))??[]
+ return <section className="gamified-journey"><div className="journey-top"><div><span className="journey-kicker">AEON · AGENT JOURNEY</span><h2>{approved?'Execution released.':declined?'Purchase not approved.':running?'Agent is working…':'Deal ready.'}</h2><p>{descriptions[open]}</p></div><div className="journey-signal"><span className="journey-orb"/>{open===4&&!approved&&!declined?'YOUR DECISION':declined?'DECLINED':running?'LIVE':'OBSERVING'}</div></div>
+ <div className="stage-stack" role="list">{stages.map(([phaseName,label],index)=>{const done=index<open||(index===5&&approved);const current=index===open;const locked=open===2&&!negotiationDone;const depth=Math.min(Math.abs(index-open),5);return <JourneyCard key={phaseName} index={index} title={label} state={done?'done':current?'active':'ready'} current={current} depth={depth}>
+ {index===0&&<><p>AEON is scanning the connected marketplace for products that match the mission.</p><div className="search-pills">{products.slice(0,5).map(p=><button className="search-pill" key={p.id} onClick={()=>openProduct(p)}><span className="mini-orb">✦</span><div><b>{p.name}</b><small>{p.category} · ₦{p.price.toLocaleString()}</small></div></button>)}</div></>}
+ {index===1&&<><p>Comparing mission fit, price, availability and your stated priorities.</p><div className="thinking-bars"><i/><i/><i/></div></>}
+ {index===2&&<><p>AEON negotiates separately with each seller agent. Watch the conversation unfold in real time.</p>{session.length?<div className="negotiation-live-stage"><div className="negotiation-live-meta"><span>SELLER {negotiationProduct+1} OF {session.length}</span><b>{session[negotiationProduct]?.product.name}</b><i>{negotiationDone?'CONVERSATION COMPLETE':'LIVE CONVERSATION'}</i></div><div className="live-chat-window">{visible.map((m,j)=><div className={`thread-message live-message ${m.speaker.toLowerCase().replace(/\s+/g,'-')} ${j===visible.length-1?'message-new':''}`} key={`${m.round}-${j}`}><small>{m.speaker} · ROUND {m.round}</small><p>{m.text}</p>{m.price!==undefined&&<b>₦{m.price.toLocaleString()}</b>}</div>)}{!negotiationDone&&<div className="typing-indicator"><span/><span/><span/>{negotiationMessage%2===0?'Seller agent is typing…':'AEON is typing…'}</div>}</div><div className="negotiation-progress">{session.map((t,j)=><span key={t.product.id} className={j<negotiationProduct?'done':j===negotiationProduct?'active':''}>{j+1}</span>)}</div></div>:<div className="chat-preview"><div className="chat-bubble">Waiting for seller-agent negotiation to start…</div></div>}</>}
+ {index===3&&<><p>Checking every proposed total against your mission authority before asking for permission.</p><div className="offer-line"><span>CONSTITUTION</span><strong>{currentBasket&&budget>0&&currentBasket.total>budget?'BLOCKED':'COMPLIANT'}</strong></div></>}
+ {index===4&&<>{declined?<div className="decline-state"><strong>Deal declined by you.</strong><p>AEON has not authorized or executed any purchase.</p></div>:<><p>AEON has stopped. Review the exact recommendation. You can remove items, swap alternatives, inspect products, or decline. Nothing is purchased until you approve.</p><div className="review-summary"><strong>{reviewProducts.length===1?'Review 1 product':`${reviewProducts.length} products in proposed basket`}</strong><small>{reviewProducts.length>1?'Remove, replace or inspect any item before approving.':'Inspect the primary recommendation or switch to an alternative.'}</small></div><div className="journey-actions">{reviewProducts.length>1&&<button className="tactile-button" onClick={()=>setBasketReview(true)}>Review basket</button>}{reviewProducts.length===1&&<button className="tactile-button" onClick={()=>openProduct(reviewProducts[0])}>Review product</button>}<button className="tactile-button primary-action" onClick={approve}>Approve deal →</button><button className="tactile-button danger-action" onClick={decline}>Don't approve</button></div></>}</>}
+ {index===5&&<><p>The approved proposal is authorized for execution.</p><div className="offer-line"><span>EXECUTION</span><strong>{approved?'RELEASED':'LOCKED'}</strong></div></>}
+ </JourneyCard>})}</div><div className="stack-nav" aria-label="Journey navigation">{stages.map(([,label],index)=><button key={label} className={index===open?'active':''} disabled={open===2&&!negotiationDone&&index!==2} onClick={()=>{if(open===2&&!negotiationDone&&index!==2)return;tick();setOpen(index)}}>{index+1}</button>)}</div><div className="stack-foot">The active stage stays centered in the Mission Journey. Later stages remain visible behind it.</div>
+ {detail&&<ProductDetail product={detail.product} deal={detail.deal} alternatives={alternatives} onSelectAlternative={p=>replaceProduct(detail.product.id,p)} onBack={()=>setDetail(null)} onApprove={open===4&&!declined?approve:undefined}/>
+ }{basketReview&&currentBasket&&<div className="basket-review-page" role="dialog" aria-modal="true"><div className="basket-review-shell"><header className="basket-review-head"><button className="detail-back" onClick={()=>setBasketReview(false)}>← Back to mission</button><span className="journey-kicker">AEON · BASKET REVIEW</span><span className="detail-source">LIVE MARKETPLACE DATA</span></header><main className="basket-review-content"><div className="basket-review-intro"><span className="journey-kicker">PROPOSED BASKET</span><h1>Review your basket</h1><p>Remove items, switch to matching alternatives, or inspect any product before approving.</p></div><div className="basket-review-list">{currentBasket.products.map((p,i)=>{const d=currentBasket.deals[i];return <article className="basket-review-row" key={p.id}><button className="basket-row-main" onClick={()=>openProduct(p)}><div className="basket-product-art"><span>AEON</span><small>{p.category}</small></div><div><b>{p.name}</b><small>{p.merchant} · ★ {p.rating} · {p.stock} in stock</small><strong>₦{d?.acceptedPrice?.toLocaleString()??p.price.toLocaleString()}</strong>{d&&d.saving>0&&<em>Save ₦{d.saving.toLocaleString()}</em>}</div></button><div className="basket-row-actions"><button className="tactile-button" onClick={()=>openProduct(p)}>Inspect</button><button className="tactile-button danger-action" onClick={()=>removeProduct(p.id)}>Remove</button></div></article>})}</div><div className="basket-review-total"><span>TOTAL</span><strong>₦{currentBasket.total.toLocaleString()}</strong><small>{budget?currentBasket.total<=budget?`Within your ₦${budget.toLocaleString()} ceiling`:`Over your ₦${budget.toLocaleString()} ceiling`:'No price ceiling'}</small></div>{alternatives.length>0&&<section className="basket-add"><span className="journey-kicker">MATCHING ALTERNATIVES</span><h2>Switch or add another option</h2><div className="basket-alts">{alternatives.map(p=><button key={p.id} onClick={()=>addAlternative(p)}><div><b>{p.name}</b><small>{p.merchant} · ★ {p.rating}</small></div><strong>₦{p.price.toLocaleString()}</strong><i>＋</i></button>)}</div></section>}<div className="journey-actions basket-review-actions"><button className="tactile-button" onClick={()=>setBasketReview(false)}>Keep reviewing</button><button className="tactile-button danger-action" onClick={decline}>Don't approve</button><button className="tactile-button primary-action" onClick={approve}>Approve basket →</button></div></main></div></div>}
+ </section>
 }
