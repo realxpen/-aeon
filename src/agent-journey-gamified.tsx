@@ -3,7 +3,6 @@ import type { ReactNode } from 'react'
 import type { Product, NegotiationResult } from './marketplace'
 import { catalog, negotiate } from './marketplace'
 import ProductDetail from './product-detail'
-import WebMCPObservabilityPanel from './webmcp-observability-panel'
 import './phase16-gamified-journey.css'
 import './phase16-gamified-journey-overrides.css'
 
@@ -63,8 +62,6 @@ export default function AgentJourneyGamified({ phase, running, approved, product
   const [negotiationSession, setNegotiationSession] = useState<{ product: Product; deal: NegotiationResult }[]>([])
   const previousRunning = useRef(false)
 
-  // A false -> true running transition is the explicit new-mission boundary.
-  // Ordinary proposal/trace updates must not reset the journey or restart negotiation.
   useEffect(() => {
     if (running && !previousRunning.current) {
       setWorking(proposal)
@@ -81,7 +78,6 @@ export default function AgentJourneyGamified({ phase, running, approved, product
     previousRunning.current = running
   }, [running, proposal])
 
-  // If the component is mounted after a mission has already started, seed the session once.
   useEffect(() => {
     if (!running || negotiationSession.length > 0 || !proposal) return
     const session = proposal.products.map((product, index) => ({ product, deal: proposal.deals[index] })).filter(item => Boolean(item.deal?.transcript?.length)) as { product: Product; deal: NegotiationResult }[]
@@ -97,15 +93,11 @@ export default function AgentJourneyGamified({ phase, running, approved, product
     return catalog.filter(product => !ids.has(product.id) && categories.has(product.category) && (!budget || product.price <= budget)).sort((a, b) => b.rating - a.rating).slice(0, 5)
   }, [reviewProducts, budget])
 
-  // Search -> Evaluate -> Negotiate can follow the real mission phase, but nothing is
-  // allowed to advance beyond NEGOTIATE while negotiation is still active.
   useEffect(() => {
     if (approved || declined || open >= 2) return
     if (target > open) setOpen(value => Math.min(value + 1, 2))
   }, [target, open, approved, declined])
 
-  // NEGOTIATE is a hard presentation/state lock. It advances only after every transcript
-  // message for every seller in this mission has actually been revealed.
   useEffect(() => {
     if (open !== 2 || negotiationDone || negotiationSession.length === 0) return
     const thread = negotiationSession[negotiationProduct]
@@ -126,7 +118,6 @@ export default function AgentJourneyGamified({ phase, running, approved, product
       }, 1200)
       return () => window.clearTimeout(timer)
     }
-    // This is the completion signal. There is no time-based transition after this point.
     setNegotiationDone(true)
   }, [open, negotiationProduct, negotiationMessage, negotiationSession, negotiationDone])
 
@@ -134,8 +125,6 @@ export default function AgentJourneyGamified({ phase, running, approved, product
     if (open === 2 && negotiationDone && !approved && !declined) setOpen(3)
   }, [open, negotiationDone, approved, declined])
 
-  // GOVERN -> APPROVAL only when the mission controller explicitly reports HUMAN APPROVAL.
-  // Never use target >= 4 here: that was the premature jump bug.
   useEffect(() => {
     if (open !== 3 || approved || declined) return
     if (phase === 'HUMAN APPROVAL') setOpen(4)
@@ -197,7 +186,6 @@ export default function AgentJourneyGamified({ phase, running, approved, product
         const depth = Math.min(Math.abs(index - open), 5)
         const locked = open === 2 && !negotiationDone && index !== 2
         return <JourneyCard key={phaseName} index={index} title={label} state={done ? 'done' : current ? 'active' : 'ready'} current={current} depth={depth} onOpen={() => {
-          // Peeking is allowed, but never allow a manual card click to terminate an active negotiation.
           if (locked) return
           setOpen(index)
         }}>
@@ -211,7 +199,6 @@ export default function AgentJourneyGamified({ phase, running, approved, product
       })}
     </div>
 
-    <div className="journey-observability"><WebMCPObservabilityPanel /></div>
     <div className="stack-nav" aria-label="Journey navigation">{stages.map(([, label], index) => <button key={label} className={index === open ? 'active' : ''} onClick={() => { if (open === 2 && !negotiationDone && index !== 2) return; playTick(); setOpen(index) }} aria-label={`View ${label}`}>{index + 1}</button>)}</div>
     <div className="stack-foot">The active stage is centered and focused. The next stages remain visible behind it; tap a visible card to peek.</div>
 
