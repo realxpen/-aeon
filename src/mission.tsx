@@ -23,91 +23,47 @@ export default function Mission(){
   const [error,setError]=useState('')
 
   useEffect(()=>{saveMissionConstitution(constitution)},[constitution])
-
   useEffect(()=>{
-    const approve=()=>{
-      setApproved(true)
-      setPhase('EXECUTION RELEASED')
-      setMission(m=>approveMission(m))
-      emitAgentActivity('Human approved proposed action','human_approval')
-    }
+    const approve=()=>{setApproved(true);setPhase('EXECUTION RELEASED');setMission(m=>approveMission(m));emitAgentActivity('Human approved proposed action','human_approval')}
     window.addEventListener('aeon:approve-mission',approve)
     return()=>window.removeEventListener('aeon:approve-mission',approve)
   },[])
 
   const runMission=async()=>{
     if(!goal.trim())return
-    setRunning(true)
-    setApproved(false)
-    setError('')
-    setPhase('SEARCHING')
+    setRunning(true);setApproved(false);setError('');setProposal(null);setProducts([]);setPhase('SEARCHING')
     emitAgentActivity('Mission accepted','Mission engine event')
     try{
       const budget=parseMissionBudget(goal)??constitution.budget
-      const requirements=searchMissionRequirements(goal)
-      const found=rankForMission(requirements,budget).slice(0,8)
-      setProducts(found)
-      emitAgentActivity('Product candidates returned','WebMCP → search_products')
-      setPhase('ANALYZING')
-      await new Promise(r=>setTimeout(r,650))
-      setPhase('NEGOTIATING')
-      await new Promise(r=>setTimeout(r,650))
-      const deals=found.map(p=>negotiate(p,constitution.canNegotiate!==false))
-      const selected=deals.filter(d=>d.finalPrice<=budget).sort((a,b)=>a.finalPrice-b.finalPrice).slice(0,4)
-      const basketProducts=selected.map(d=>found.find(p=>p.id===d.productId)!).filter(Boolean)
-      const total=selected.reduce((s,d)=>s+d.finalPrice,0)
-      const saving=selected.reduce((s,d)=>s+d.saving,0)
-      setProposal({products:basketProducts,deals:selected,total,saving})
-      setPhase('CONSTITUTION CHECK')
-      await new Promise(r=>setTimeout(r,650))
-      setPhase('HUMAN APPROVAL')
-      setRunning(false)
-      emitAgentActivity('Purchase blocked: human approval required','request_purchase_approval')
+      const requirements=searchMissionRequirements(goal,budget)
+      const candidates=requirements.flatMap(r=>r.products)
+      const unique=Array.from(new Map(candidates.map(p=>[p.id,p])).values())
+      const found=rankForMission(unique,['performance','audio quality']).slice(0,8)
+      if(found.length===0)throw new Error('NO_COMPLIANT_DEAL')
+      setProducts(found);emitAgentActivity(`${found.length} product candidates returned`,'WebMCP → search_products')
+      setPhase('ANALYZING');await new Promise(r=>setTimeout(r,900))
+      setPhase('NEGOTIATING');await new Promise(r=>setTimeout(r,900))
+      const negotiated=found.map(product=>({product,deal:negotiate(product,budget,constitution)}))
+      const selected=negotiated.filter(x=>x.deal.acceptedPrice<=budget).sort((a,b)=>a.deal.acceptedPrice-b.deal.acceptedPrice).slice(0,4)
+      if(selected.length===0)throw new Error('NO_COMPLIANT_DEAL')
+      const basketProducts=selected.map(x=>x.product)
+      const deals=selected.map(x=>x.deal)
+      const total=deals.reduce((s,d)=>s+d.acceptedPrice,0)
+      const saving=deals.reduce((s,d)=>s+d.saving,0)
+      setProposal({products:basketProducts,deals,total,saving})
+      setPhase('CONSTITUTION CHECK');await new Promise(r=>setTimeout(r,900))
+      setPhase('HUMAN APPROVAL');setRunning(false);emitAgentActivity('Purchase blocked: human approval required','request_purchase_approval')
     }catch(e){
-      const message=e instanceof Error?e.message:'Mission failed'
-      setError(message)
-      setRunning(false)
-      setPhase('NO COMPLIANT DEAL')
+      const message=e instanceof Error?e.message:'Mission failed';setError(message);setRunning(false);setPhase('NO COMPLIANT DEAL')
     }
   }
 
   const noDealBudget=parseMissionBudget(goal)??constitution.budget
-
-  return (
-    <main className="mission">
-      <header className="mission-header">
-        <div>
-          <span className="eyebrow">AEON · MISSION CONTROL</span>
-          <h1>Your agent is {approved?'released':running?'working':'waiting'}.</h1>
-        </div>
-        <div className="mission-id">AEON-001</div>
-      </header>
-
-      <section className="mission-input panel">
-        <label htmlFor="goal">What do you want your agent to do?</label>
-        <div className="input-row">
-          <input id="goal" value={goal} onChange={e=>setGoal(e.target.value)} placeholder="e.g. Find me a phone under ₦500,000 and negotiate the best deal"/>
-          <button className="primary tactile-button" onClick={runMission}>Deploy agent →</button>
-        </div>
-      </section>
-
-      <AgentJourneyGamified phase={phase} running={running} approved={approved} products={products} proposal={proposal}/>
-
-      {error && (
-        <NoDealPanel
-          budget={noDealBudget}
-          candidates={products}
-          onIncreaseBudget={b=>setConstitution(c=>({...c,budget:b}))}
-          onChangeRules={()=>window.dispatchEvent(new CustomEvent('aeon:edit-rules'))}
-          onRetry={runMission}
-          onEnd={()=>{setError('');setPhase('SEARCHING')}}
-        />
-      )}
-
-      <div className="mission-support">
-        <AgentConsole/>
-        <ConstitutionFirewall/>
-      </div>
-    </main>
-  )
+  return <main className="mission">
+    <header className="mission-header"><div><span className="eyebrow">AEON · MISSION CONTROL</span><h1>Your agent is {approved?'released':running?'working':'waiting'}.</h1></div><div className="mission-id">AEON-001</div></header>
+    <section className="mission-input panel"><label htmlFor="goal">What do you want your agent to do?</label><div className="input-row"><input id="goal" value={goal} onChange={e=>setGoal(e.target.value)} placeholder="e.g. Find me a phone under ₦500,000 and negotiate the best deal"/><button className="primary tactile-button" onClick={runMission}>Deploy agent →</button></div></section>
+    <AgentJourneyGamified phase={phase} running={running} approved={approved} products={products} proposal={proposal}/>
+    {error&&<NoDealPanel budget={noDealBudget} candidates={products} onIncreaseBudget={b=>setConstitution(c=>({...c,budget:b}))} onChangeRules={()=>window.dispatchEvent(new CustomEvent('aeon:edit-rules'))} onRetry={runMission} onEnd={()=>{setError('');setPhase('SEARCHING')}}/>}
+    <div className="mission-support"><AgentConsole/><ConstitutionFirewall/></div>
+  </main>
 }
