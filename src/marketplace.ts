@@ -26,6 +26,8 @@ export function classifyMissionInput(goal:string):'valid'|'ambiguous'|'invalid'{
  if(/\b(surprise me|surprise|something nice|anything|whatever|you choose|pick something|choose for me)\b/i.test(q))return 'ambiguous'
  const tokens=meaningfulTokens(q)
  if(tokens.length<1)return 'invalid'
+ const setupIntent=/\b(creator\s+setup|content\s+setup|studio\s+setup|creator\s+kit|content\s+kit|studio\s+kit|creator\s+rig|creator\s+stack|setup|kit|bundle)\b/i.test(q)
+ if(setupIntent)return 'valid'
  if(Object.keys(aliases).some(k=>q.includes(k)))return 'valid'
  const productTerms=['laptop','computer','pc','tablet','headphone','headphones','earbuds','monitor','keyboard','mouse','console','tv','television','watch','printer','router','speaker','desk','chair','backpack','shoes','camera','microphone','tripod','light','phone','smartphone']
  if(productTerms.some(term=>q.includes(term)))return 'valid'
