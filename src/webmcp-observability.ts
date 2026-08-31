@@ -3,7 +3,7 @@ import { emitAgentActivity } from './agent-activity'
 export type WebMCPTrace = {
   id: string
   tool: string
-  phase: 'CALL' | 'RESULT' | 'ERROR'
+  phase: 'CALL' | 'RESULT' | 'ERROR' | 'DECISION'
   input?: unknown
   output?: unknown
   timestamp: number
@@ -18,6 +18,11 @@ export function emitWebMCPTrace(trace: Omit<WebMCPTrace, 'id' | 'timestamp'>) {
   const full = { ...trace, id: `trace_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, timestamp: Date.now() }
   window.dispatchEvent(new CustomEvent<WebMCPTrace>(TRACE_EVENT, { detail: full }))
   return full
+}
+
+export function emitHumanDecision(decision: 'APPROVED' | 'DECLINED', detail: string) {
+  emitWebMCPTrace({ tool: 'human_authority', phase: 'DECISION', output: { decision, detail } })
+  emitAgentActivity({ stage: decision === 'APPROVED' ? 'ALLOWED' : 'BLOCKED', title: decision === 'APPROVED' ? 'Human approval granted' : 'Human approval declined', detail, tool: 'human_authority', reason: decision === 'DECLINED' ? 'Human chose not to authorize purchase' : undefined })
 }
 
 export function subscribeWebMCPTrace(listener: (trace: WebMCPTrace) => void, onReset?: () => void) {
