@@ -34,12 +34,14 @@ export default function Mission(){
     setRunning(true);setApproved(false);setError('');setProposal(null);setProducts([]);setPhase('SEARCHING')
     emitAgentActivity('Mission accepted','Mission engine event')
     try{
-      const budget=parseMissionBudget(goal)??constitution.budget
+      const parsedBudget=parseMissionBudget(goal)
+      const budget=parsedBudget?.amount??constitution.budget
       const requirements=searchMissionRequirements(goal,budget)
       const candidates=requirements.flatMap(r=>r.products)
       const unique=Array.from(new Map(candidates.map(p=>[p.id,p])).values())
-      const found=rankForMission(unique,['performance','audio quality']).slice(0,8)
-      if(found.length===0)throw new Error('NO_COMPLIANT_DEAL')
+      const priorities=constitution.priorities.length?constitution.priorities:[]
+      const found=rankForMission(unique,priorities).slice(0,8)
+      if(found.length===0)throw new Error('NO_MATCHING_PRODUCTS')
       setProducts(found);emitAgentActivity(`${found.length} product candidates returned`,'WebMCP → search_products')
       setPhase('ANALYZING');await new Promise(r=>setTimeout(r,900))
       setPhase('NEGOTIATING');await new Promise(r=>setTimeout(r,900))
@@ -58,7 +60,7 @@ export default function Mission(){
     }
   }
 
-  const noDealBudget=parseMissionBudget(goal)??constitution.budget
+  const noDealBudget=parseMissionBudget(goal)?.amount??constitution.budget
   return <main className="mission">
     <header className="mission-header"><div><span className="eyebrow">AEON · MISSION CONTROL</span><h1>Your agent is {approved?'released':running?'working':'waiting'}.</h1></div><div className="mission-id">AEON-001</div></header>
     <section className="mission-input panel"><label htmlFor="goal">What do you want your agent to do?</label><div className="input-row"><input id="goal" value={goal} onChange={e=>setGoal(e.target.value)} placeholder="e.g. Find me a phone under ₦500,000 and negotiate the best deal"/><button className="primary tactile-button" onClick={runMission}>Deploy agent →</button></div></section>
