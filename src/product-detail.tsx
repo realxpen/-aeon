@@ -1,9 +1,9 @@
 import type {Product,NegotiationResult} from './marketplace'
 import './product-detail.css'
 
-type Props={product:Product;deal?:NegotiationResult;onBack:()=>void;onApprove?:()=>void}
+type Props={product:Product;deal?:NegotiationResult;onBack:()=>void;onApprove?:()=>void;alternatives?:Product[];onSelectAlternative?:(product:Product)=>void}
 
-export default function ProductDetail({product,deal,onBack,onApprove}:Props){
+export default function ProductDetail({product,deal,onBack,onApprove,alternatives=[],onSelectAlternative}:Props){
  const finalPrice=deal?.acceptedPrice??product.price
  return <div className="product-detail-page" role="dialog" aria-modal="true">
   <div className="product-detail-shell">
@@ -15,6 +15,7 @@ export default function ProductDetail({product,deal,onBack,onApprove}:Props){
       <div className="detail-actions"><button className="tactile-button" onClick={onBack}>Keep reviewing</button>{onApprove&&<button className="tactile-button primary-action" onClick={onApprove}>Approve this deal →</button>}</div>
      </div>
     </section>
+    {alternatives.length>0&&<section className="detail-alternatives"><span className="journey-kicker">ALTERNATIVES</span><h2>Prefer another option?</h2><p>These are other matching marketplace products within your current constraints.</p><div className="detail-alternative-list">{alternatives.map(a=><button key={a.id} onClick={()=>onSelectAlternative?.(a)}><div><b>{a.name}</b><small>★ {a.rating} · {a.stock} in stock · {a.negotiable?'Negotiable':'Fixed price'}</small></div><strong>₦{a.price.toLocaleString()}</strong><i>›</i></button>)}</div></section>}
     <section className="detail-grid"><article><span>MISSION FIT</span><strong>{Math.round((product.performance+product.audio)/2)}%</strong><p>Performance and audio signals used by AEON when evaluating this marketplace candidate.</p></article><article><span>PERFORMANCE</span><strong>{product.performance}/100</strong><p>Mission performance signal.</p></article><article><span>AUDIO</span><strong>{product.audio}/100</strong><p>Audio quality signal.</p></article><article><span>AVAILABILITY</span><strong>{product.stock}</strong><p>Units currently represented in the marketplace.</p></article></section>
     {deal?.transcript?.length?<section className="detail-transcript"><div><span className="journey-kicker">NEGOTIATION RECORD</span><h2>How AEON reached this offer</h2></div>{deal.transcript.map((m,i)=><div className="detail-message" key={`${m.round}-${i}`}><span>{m.speaker}</span><p>{m.text}</p>{m.price!==undefined&&<b>₦{m.price.toLocaleString()}</b>}</div>)}</section>:null}
    </main>
