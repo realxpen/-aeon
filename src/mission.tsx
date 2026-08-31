@@ -8,9 +8,9 @@ import AgentConsole from './agent-console'
 import ConstitutionFirewall from './constitution-firewall'
 import NoDealPanel from './no-deal-panel'
 import AgentJourneyGamified from './agent-journey-gamified'
-import { getMissionConstitution, saveMissionConstitution, MissionConstitution, parseMissionBudget } from './mission-state'
+import { getMissionConstitution, saveMissionConstitution, MissionConstitution, parseMissionBudget, deriveMissionPriorities } from './mission-state'
 import { emitAgentActivity } from './agent-activity'
-import { resetWebMCPTrace, executeObserved } from './webmcp-observability'
+import { resetWebMCPTrace, executeObserved, setActiveMissionContext, clearActiveMissionContext } from './webmcp-observability'
 import { searchMissionRequirements, rankForMission, negotiate, Product, NegotiationResult, classifyMissionInput } from './marketplace'
 
 const CEILING_PRESETS = [100000, 250000, 500000, 1000000]
@@ -37,9 +37,11 @@ export default function Mission(){
 
   useEffect(()=>{saveMissionConstitution(constitution)},[constitution])
   useEffect(()=>{
-    const approve=()=>{setApproved(true);setRunning(false);setPhase('EXECUTION RELEASED');setMission(m=>approveMission(m));emitAgentActivity('Human approved proposed action','human_approval')}
+    const approve=()=>{setApproved(true);setRunning(false);setPhase('EXECUTION RELEASED');emitAgentActivity('Human approved proposed action','human_approval')}
+    const decline=()=>{setApproved(false);setRunning(false);setPhase('HUMAN APPROVAL');emitAgentActivity('Human declined proposed action','human_approval')}
     window.addEventListener('aeon:approve-mission',approve)
-    return()=>window.removeEventListener('aeon:approve-mission',approve)
+    window.addEventListener('aeon:decline-mission',decline)
+    return()=>{window.removeEventListener('aeon:approve-mission',approve);window.removeEventListener('aeon:decline-mission',decline)}
   },[])
 
   const resetMissionForNewPrompt=()=>{
@@ -54,55 +56,50 @@ export default function Mission(){
   }
 
   const runMission=async()=>{
-    if(!goal.trim())return
-    resetWebMCPTrace()
-    if(classifyMissionInput(goal)==='invalid'){
-      setInputIssue('invalid');setError('');setProposal(null);setProducts([]);setRunning(false);setPhase('INVALID REQUEST');return
+    const missionGoal=goal.trim()
+    if(!missionGoal)return
+    const budget=parseMissionBudget(missionGoal)?.amount??(customCeiling?Number(customCeiling):selectedCeiling||0)
+    const priorities=deriveMissionPriorities(missionGoal)
+    const missionId=`AEON-${Date.now()}-${Math.random().toString(36).slice(2,7).toUpperCase()}`
+    const context={id:missionId,goal:missionGoal,budget,canNegotiate:true,purchaseRequiresApproval:true}
+    setActiveMissionContext(context)
+    setConstitution(c=>({...c,goal:missionGoal,budget,canNegotiate:true,purchaseRequiresApproval:true,priorities}))
+    setMission(initialMission());setProposal(null);setProducts([]);setError('');setInputIssue('');setRunning(true);setApproved(false);setPhase('SEARCHING')
+    emitAgentActivity(`Mission accepted: “${missionGoal}” · ceiling ${budget?`₦${budget.toLocaleString()}`:'none'}`,'Mission engine')
+    if(classifyMissionInput(missionGoal)==='invalid'){
+      setInputIssue('invalid');setRunning(false);setPhase('INVALID REQUEST');return
     }
-    const budget=activeBudget
-    const multiRequest=isMultiProductRequest
-    setRunning(true);setApproved(false);setError('');setInputIssue('');setProposal(null);setProducts([]);setPhase('SEARCHING')
-    emitAgentActivity('Mission accepted','Mission engine event')
+    const multiRequest=multiProductPattern.test(missionGoal)
     try{
-      const requirements=await executeObserved('search_products',{query:goal,maxPrice:budget||null},async()=>searchMissionRequirements(goal,budget||undefined))
+      const requirements=await executeObserved('search_products',{query:missionGoal,maxPrice:budget||null},async()=>searchMissionRequirements(missionGoal,budget||undefined))
       const candidates=requirements.flatMap(r=>r.products)
       const unique=Array.from(new Map(candidates.map(p=>[p.id,p])).values())
-      const priorities=constitution.priorities.length?constitution.priorities:[]
-      const found=rankForMission(unique,priorities).slice(0,multiRequest?8:5)
+      const found=rankForMission(unique,priorities).filter(p=>!budget||p.price<=budget).slice(0,multiRequest?8:5)
       if(found.length===0)throw Object.assign(new Error('NO_MATCHING_PRODUCTS'),{code:'UNAVAILABLE'})
       const negotiationPool=multiRequest?found:found.slice(0,1)
       setProducts(found)
       setPhase('ANALYZING');await new Promise(r=>setTimeout(r,2600))
-      await executeObserved('compare_products',{productIds:found.map(p=>p.id),priorities},async()=>rankForMission(found,priorities))
+      await executeObserved('compare_products',{productIds:found.map(p=>p.id),priorities,budget:budget||null},async()=>rankForMission(found,priorities))
       setPhase('NEGOTIATING')
-      const negotiated: {product:Product;deal:NegotiationResult}[]=[]
+      const negotiated:{product:Product;deal:NegotiationResult}[]=[]
       for(const product of negotiationPool){
         await new Promise(r=>setTimeout(r,1300))
         const deal=await executeObserved('negotiate_offer',{productId:product.id,product:product.name,listedPrice:product.price,budget:budget||null},async()=>{
           emitAgentActivity(`Seller agent contacted: ${product.name}`,'seller_agent')
           return negotiate(product,budget,constitution)
         })
-        negotiated.push({product,deal})
-        await new Promise(r=>setTimeout(r,2200))
+        negotiated.push({product,deal});await new Promise(r=>setTimeout(r,2200))
       }
-      const selected=multiRequest
-        ? negotiated.filter(x=>!activeBudget||x.deal.acceptedPrice<=activeBudget).sort((a,b)=>a.deal.acceptedPrice-b.deal.acceptedPrice)
-        : negotiated.filter(x=>!activeBudget||x.deal.acceptedPrice<=activeBudget)
+      const selected=multiRequest?negotiated.filter(x=>!budget||x.deal.acceptedPrice<=budget).sort((a,b)=>a.deal.acceptedPrice-b.deal.acceptedPrice):negotiated.filter(x=>!budget||x.deal.acceptedPrice<=budget)
       if(selected.length===0)throw Object.assign(new Error('NO_COMPLIANT_DEAL'),{code:'NODEAL'})
       const basketProducts=multiRequest?selected.map(x=>x.product):[selected[0].product]
       const deals=multiRequest?selected.map(x=>x.deal):[selected[0].deal]
-      const total=deals.reduce((s,d)=>s+d.acceptedPrice,0)
-      const saving=deals.reduce((s,d)=>s+d.saving,0)
-      if(activeBudget>0&&total>activeBudget)throw Object.assign(new Error('NO_COMPLIANT_DEAL'),{code:'NODEAL'})
+      const total=deals.reduce((s,d)=>s+d.acceptedPrice,0);const saving=deals.reduce((s,d)=>s+d.saving,0)
+      if(budget>0&&total>budget)throw Object.assign(new Error('NO_COMPLIANT_DEAL'),{code:'NODEAL'})
       setProposal({products:basketProducts,deals,total,saving})
       setPhase('CONSTITUTION CHECK');await new Promise(r=>setTimeout(r,2400))
       setPhase('HUMAN APPROVAL');setRunning(false);emitAgentActivity('Purchase blocked: human approval required','request_purchase_approval')
-    }catch(e){
-      const failure=e as Error & {code?:string}
-      setError(failure.message||'Mission failed');setRunning(false)
-      if(failure.code==='UNAVAILABLE'||failure.message==='NO_MATCHING_PRODUCTS'){setInputIssue('unavailable');setPhase('NO MATCHING PRODUCTS')}
-      else{setInputIssue('noDeal');setPhase('NO COMPLIANT DEAL')}
-    }
+    }catch(e){const failure=e as Error & {code?:string};setError(failure.message||'Mission failed');setRunning(false);if(failure.code==='UNAVAILABLE'||failure.message==='NO_MATCHING_PRODUCTS'){setInputIssue('unavailable');setPhase('NO MATCHING PRODUCTS')}else{setInputIssue('noDeal');setPhase('NO COMPLIANT DEAL')}}
   }
 
   const missionStarted=running||approved||!!error||!!proposal||!!inputIssue
