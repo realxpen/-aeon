@@ -1,0 +1,42 @@
+/* Whole-app text-flow layer: preserves AEON visuals while preventing cramped copy. */
+:where(.app,.mission,.shell,.marketplace-view){overflow-wrap:anywhere}
+:where(.app,.mission,.shell,.marketplace-view) :where(h1,h2,h3,h4,h5,h6,p){max-width:100%;text-wrap:pretty}
+:where(.app,.mission,.shell,.marketplace-view) :where(h1,h2,h3,h4,h5,h6){line-height:1.16}
+:where(.app,.mission,.shell,.marketplace-view) :where(p){line-height:1.65}
+:where(.app,.mission,.shell,.marketplace-view) :where(label,.kicker,.eyebrow,.mission-id,.nav-status,.tool-list-label,.live-trace-head,.deal-label,.coverage span,.coverage small,.closest-title,.firewall-status){line-height:1.45}
+:where(.app,.mission,.shell,.marketplace-view) :where(strong,b){line-height:1.35}
+:where(.app,.mission,.shell,.marketplace-view) :where(p + p){margin-top:12px}
+:where(.app,.mission,.shell,.marketplace-view) :where(h1 + p,h2 + p,h3 + p,h4 + p){margin-top:10px}
+:where(.app,.mission,.shell,.marketplace-view) :where(p + h1,p + h2,p + h3){margin-top:22px}
+:where(.app,.mission,.shell,.marketplace-view) :where(button){white-space:normal;overflow-wrap:anywhere;line-height:1.35}
+:where(.app,.mission,.shell,.marketplace-view) :where(input,textarea){line-height:1.55}
+:where(.app,.mission,.shell,.marketplace-view) :where(pre,code){max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}
+:where(.mission) .mission-header h1{line-height:1.12}
+:where(.mission) .mission-input label{margin-bottom:12px}
+:where(.mission) .input-hint{line-height:1.55;overflow-wrap:anywhere}
+:where(.mission) .ceiling-copy{gap:5px}
+:where(.mission) .ceiling-copy small{line-height:1.5}
+:where(.mission) .no-deal p{line-height:1.7}
+:where(.mission) .candidate span,:where(.mission) .candidate small{line-height:1.45}
+:where(.mission) .human-decision{align-items:flex-start}
+:where(.marketplace-view) .market-head h1{line-height:1.08}
+:where(.marketplace-view) .market-head .muted{line-height:1.7}
+:where(.marketplace-view) .constitution-banner b{line-height:1.5}
+:where(.marketplace-view) .product-card h3{line-height:1.25}
+:where(.marketplace-view) .product-card p{line-height:1.55}
+:where(.marketplace-view) .negotiation-message p{line-height:1.65}
+:where(.marketplace-view) .result-line{line-height:1.6}
+:where(.marketplace-view) .blocked{line-height:1.55}
+:where(.firewall) .firewall-mission{line-height:1.6}
+:where(.firewall) .firewall-rule{gap:10px;line-height:1.5}
+:where(.agent-journey,.agent-console) :where(p,small){overflow-wrap:anywhere}
+:where(.agent-journey) .message-bubble{line-height:1.65}
+:where(.agent-journey) .journey-checkpoint p{line-height:1.6}
+:where(.agent-console) .tool-detail>p{line-height:1.7}
+@media(max-width:760px){
+ :where(.app,.mission,.shell,.marketplace-view) :where(p){line-height:1.7}
+ :where(.mission) .mission-header h1{font-size:clamp(28px,9vw,42px);line-height:1.12}
+ :where(.marketplace-view) .market-head h1{line-height:1.08}
+ :where(.mission) .human-decision{display:block}
+ :where(.mission) .human-decision>div:first-child{margin-bottom:16px}
+}
