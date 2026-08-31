@@ -10,6 +10,10 @@ export default function ConstitutionFirewall(){
   const offActivity=subscribeAgentActivity(e=>setEvents(x=>[e,...x].slice(0,30)))
   return()=>{offMission();offActivity()}
  },[])
+ const safeStage=(stage?:string)=>String(stage??'AGENT').toLowerCase()
+ const stageLabel=(stage?:string)=>String(stage??'AGENT')
+ const actor=(stage?:string)=>{const s=stageLabel(stage);return s==='COMPLETED'?'AEON':s==='BLOCKED'||s==='VIOLATION'?'FIREWALL':s==='EVALUATING'?'CONSTITUTION':'AGENT'}
+ const avatar=(stage?:string)=>{const s=stageLabel(stage);return s==='BLOCKED'||s==='VIOLATION'?'!':s==='COMPLETED'?'A':s==='EVALUATING'?'C':'→'}
  return <div className="firewall panel">
   <style>{`
    .firewall-chat{display:flex;flex-direction:column;gap:12px;margin-top:18px;max-height:520px;overflow:auto;padding:4px 2px 4px 0;scroll-behavior:smooth}
@@ -28,21 +32,14 @@ export default function ConstitutionFirewall(){
    @media(max-width:700px){.firewall-head{flex-direction:column}.firewall-chat{max-height:460px}.chat-bubble{max-width:calc(100% - 40px)}.firewall-rule{gap:8px 12px}}
   `}</style>
   <div className="firewall-head"><div><div className="kicker">AEON / CONSTITUTION FIREWALL</div><h3>Live governance observability</h3><p className="muted">Every WebMCP action enters the activity stream. The constitution determines whether it can execute.</p></div><span className="firewall-status">● FIREWALL ACTIVE</span></div>
-  <div className="firewall-rule"><span>ACTIVE CONSTITUTION</span><b>NEGOTIATION: {constitution.canNegotiate?'AUTHORIZED':'DENIED'}</b><b>CEILING: ₦{constitution.budget.toLocaleString()}</b></div>
+  <div className="firewall-rule"><span>ACTIVE CONSTITUTION</span><b>NEGOTIATION: {constitution.canNegotiate?'AUTHORIZED':'DENIED'}</b><b>CEILING: ₦{Number(constitution.budget??0).toLocaleString()}</b></div>
   <div className="firewall-chat">
-   {events.length===0?<div className="firewall-empty chat-empty">Waiting for agent activity…<br/><strong>Run a Marketplace mission to see AEON’s conversation here.</strong></div>:events.map((e,i)=>{
-    const kind=e.stage.toLowerCase();
-    const name=e.stage==='COMPLETED'?'AEON':e.stage==='BLOCKED'||e.stage==='VIOLATION'?'FIREWALL':e.stage==='EVALUATING'?'CONSTITUTION':'AGENT'
-    return <div className={`chat-row ${kind} ${i===0?'current':''}`} key={e.id}>
-      <div className="chat-avatar">{e.stage==='BLOCKED'||e.stage==='VIOLATION'?'!':e.stage==='COMPLETED'?'A':e.stage==='EVALUATING'?'C':'→'}</div>
-      <div className="chat-bubble">
-       <div className="chat-meta"><span className="chat-name">{name}</span><time className="chat-time">{new Date(e.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}</time></div>
-       <div className="chat-title">{e.title}</div>
-       <div className="chat-detail">{e.detail}</div>
-       {e.tool&&<span className="chat-tool">{e.tool}</span>}
+   {events.length===0?<div className="firewall-empty chat-empty">Waiting for agent activity…<br/><strong>Run a Marketplace mission to see AEON’s conversation here.</strong></div>:events.map((e,i)=>{const kind=safeStage(e.stage);return <div className={`chat-row ${kind} ${i===0?'current':''}`} key={e.id??`${e.timestamp}-${i}`}>
+      <div className="chat-avatar">{avatar(e.stage)}</div>
+      <div className="chat-bubble"><div className="chat-meta"><span className="chat-name">{actor(e.stage)}</span><time className="chat-time">{e.timestamp?new Date(e.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}):'now'}</time></div>
+       <div className="chat-title">{e.title??'Agent activity'}</div><div className="chat-detail">{e.detail??''}</div>{e.tool&&<span className="chat-tool">{e.tool}</span>}
       </div>
-    </div>
-   })}
+    </div>})}
   </div>
  </div>
 }
