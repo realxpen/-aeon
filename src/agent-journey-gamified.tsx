@@ -30,17 +30,18 @@ export default function AgentJourneyGamified({phase,running,approved,products,pr
  const reviewProducts=basket?.products??products
  const alternatives=useMemo(()=>catalog.filter(p=>!reviewProducts.some(x=>x.id===p.id)&&reviewProducts.some(x=>x.category===p.category)&&(!budget||p.price<=budget)).sort((a,b)=>b.rating-a.rating).slice(0,5),[reviewProducts,budget])
  const threads=useMemo(()=>basket?.products.map((product,i)=>({product,deal:basket.deals[i]})).filter(x=>x.deal?.transcript?.length)??[],[basket])
+ const journeyTarget=(!approved&&target>=3&&!negotiationDone)?2:target
 
  useEffect(()=>{setWorking(proposal);setDeclined(false);setBasketReview(false);setDetail(null)},[proposal])
- useEffect(()=>{stackRef.current?.scrollIntoView({behavior:'smooth',block:'center'})},[open])
+ useEffect(()=>{if(open<0)return;const node=stackRef.current;if(!node)return;const y=node.getBoundingClientRect().top+window.scrollY-96;window.scrollTo({top:Math.max(0,y),behavior:'smooth'})},[open])
  useEffect(()=>{if(open!==2||!threads.length){setNegotiationProduct(0);setNegotiationMessage(-1);setNegotiationDone(false);return}setNegotiationProduct(0);setNegotiationMessage(-1);setNegotiationDone(false)},[open,threads.length])
  useEffect(()=>{if(open!==2||!threads.length||negotiationDone)return;const thread=threads[negotiationProduct];if(!thread){setNegotiationDone(true);return}if(negotiationMessage<thread.deal.transcript.length-1){const id=window.setTimeout(()=>{setNegotiationMessage(n=>n+1);tick()},2200);return()=>window.clearTimeout(id)}if(negotiationProduct<threads.length-1){const id=window.setTimeout(()=>{setNegotiationProduct(n=>n+1);setNegotiationMessage(-1);tick()},3200);return()=>window.clearTimeout(id)}const id=window.setTimeout(()=>setNegotiationDone(true),3000);return()=>window.clearTimeout(id)},[open,threads,negotiationProduct,negotiationMessage,negotiationDone])
- useEffect(()=>{if(!running||open===4||target>=5||target===2&&!negotiationDone)return;const id=window.setTimeout(()=>setOpen(target+1),target===2?1000:2200);return()=>window.clearTimeout(id)},[running,open,target,negotiationDone])
+ useEffect(()=>{if(!running)return;if(open===4||approved)return;if(open===2&&!negotiationDone)return;if(open!==journeyTarget){const id=window.setTimeout(()=>setOpen(journeyTarget),800);return()=>window.clearTimeout(id)}},[running,open,journeyTarget,negotiationDone,approved])
 
  const openProduct=(p:Product)=>{const i=basket?.products.findIndex(x=>x.id===p.id)??-1;setDetail({product:p,deal:i>=0?basket?.deals[i]:undefined});tick()}
  const replace=(oldId:string,next:Product)=>{if(!basket)return;const i=basket.products.findIndex(p=>p.id===oldId);if(i<0)return;const deal=negotiate(next,budget);const ps=[...basket.products];const ds=[...basket.deals];ps[i]=next;ds[i]=deal;setWorking({products:ps,deals:ds,total:ds.reduce((s,d)=>s+d.acceptedPrice,0),saving:ds.reduce((s,d)=>s+d.saving,0)});tick()}
  const remove=(id:string)=>{if(!basket)return;const i=basket.products.findIndex(p=>p.id===id);if(i<0)return;const ps=basket.products.filter(p=>p.id!==id);const ds=basket.deals.filter((_,n)=>n!==i);setWorking({products:ps,deals:ds,total:ds.reduce((s,d)=>s+d.acceptedPrice,0),saving:ds.reduce((s,d)=>s+d.saving,0)});tick()}
- const add=(p:Product)=>{const d=negotiate(p,budget);const ps=[...(basket?.products??[]),p];const ds=[...(basket?.deals??[]),d];setWorking({products:ps,deals:ds,total:ds.reduce((s,x)=>s+x.acceptedPrice,0),saving:ds.reduce((s,x)=>s+x.saving,0)});tick()}
+ const add=(p:Product)=>{const d=negotiate(p,budget);const ps=[...(basket?.products??[]),p];const ds=[...(basket?.deals??[]),d];setWorking({products:ps,deals:ds,total:ds.reduce((s,x)=>s+x.acceptedPrice,0),saving:ds.reduce((s,d)=>s+d.saving,0)});tick()}
  const approve=()=>{tick();window.dispatchEvent(new CustomEvent('aeon:approve-mission',{detail:basket??proposal}))}
  const decline=()=>{tick();setDeclined(true);window.dispatchEvent(new CustomEvent('aeon:decline-mission',{detail:basket??proposal}))}
  const visible=threads[negotiationProduct]?.deal.transcript.slice(0,Math.max(0,negotiationMessage+1))??[]
