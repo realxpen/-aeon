@@ -61,11 +61,18 @@ export default function Mission(){
   }
 
   const noDealBudget=parseMissionBudget(goal)?.amount??constitution.budget
+  const missionStarted=running||approved||!!error||!!proposal||goal.trim().length>0
+
   return <main className="mission">
     <header className="mission-header"><div><span className="eyebrow">AEON · MISSION CONTROL</span><h1>Your agent is {approved?'released':running?'working':'waiting'}.</h1></div><div className="mission-id">AEON-001</div></header>
-    <section className="mission-input panel"><label htmlFor="goal">What do you want your agent to do?</label><div className="input-row"><input id="goal" value={goal} onChange={e=>setGoal(e.target.value)} placeholder="e.g. Find me a phone under ₦500,000 and negotiate the best deal"/><button className="primary tactile-button" onClick={runMission}>Deploy agent →</button></div></section>
-    <AgentJourneyGamified phase={phase} running={running} approved={approved} products={products} proposal={proposal}/>
-    {error&&<NoDealPanel budget={noDealBudget} candidates={products} onIncreaseBudget={b=>setConstitution(c=>({...c,budget:b}))} onChangeRules={()=>window.dispatchEvent(new CustomEvent('aeon:edit-rules'))} onRetry={runMission} onEnd={()=>{setError('');setPhase('SEARCHING')}}/>}
-    <div className="mission-support"><AgentConsole/><ConstitutionFirewall/></div>
+    <section className={`mission-input panel ${missionStarted?'mission-input-active':''}`}>
+      <label htmlFor="goal">What do you want your agent to do?</label>
+      <div className="input-row"><input id="goal" value={goal} onChange={e=>setGoal(e.target.value)} placeholder="e.g. Find me a phone under ₦500,000 and negotiate the best deal"/><button className="primary tactile-button" onClick={runMission}>Deploy agent →</button></div>
+    </section>
+    {missionStarted&&<>
+      <AgentJourneyGamified phase={phase} running={running} approved={approved} products={products} proposal={proposal}/>
+      {error&&<NoDealPanel budget={noDealBudget} candidates={products} onIncreaseBudget={b=>setConstitution(c=>({...c,budget:b}))} onChangeRules={()=>window.dispatchEvent(new CustomEvent('aeon:edit-rules'))} onRetry={runMission} onEnd={()=>{setError('');setProposal(null);setProducts([]);setPhase('SEARCHING')}}/>}
+      <div className="mission-support"><AgentConsole/><ConstitutionFirewall/></div>
+    </>}
   </main>
 }
