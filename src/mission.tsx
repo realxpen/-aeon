@@ -12,6 +12,8 @@ import { getMissionConstitution, saveMissionConstitution, MissionConstitution, p
 import { emitAgentActivity } from './agent-activity'
 import { searchMissionRequirements, rankForMission, negotiate, Product, NegotiationResult } from './marketplace'
 
+const CEILING_PRESETS = [100000, 250000, 500000, 1000000]
+
 export default function Mission(){
   const [mission,setMission]=useState<MissionState>(()=>initialMission())
   const [constitution,setConstitution]=useState<MissionConstitution>(()=>getMissionConstitution())
@@ -22,6 +24,12 @@ export default function Mission(){
   const [running,setRunning]=useState(false)
   const [approved,setApproved]=useState(false)
   const [error,setError]=useState('')
+  const [selectedCeiling,setSelectedCeiling]=useState(constitution.budget)
+  const [customCeiling,setCustomCeiling]=useState('')
+
+  const parsedBudget=parseMissionBudget(goal)
+  const hasExplicitCeiling=!!parsedBudget
+  const activeBudget=parsedBudget?.amount??(customCeiling?Number(customCeiling):selectedCeiling)
 
   useEffect(()=>{saveMissionConstitution(constitution)},[constitution])
   useEffect(()=>{
@@ -32,11 +40,11 @@ export default function Mission(){
 
   const runMission=async()=>{
     if(!goal.trim())return
+    const budget=parsedBudget?.amount??(customCeiling?Number(customCeiling):selectedCeiling)
+    if(!budget||budget<1000)return
     setRunning(true);setApproved(false);setError('');setProposal(null);setProducts([]);setPhase('SEARCHING')
     emitAgentActivity('Mission accepted','Mission engine event')
     try{
-      const parsedBudget=parseMissionBudget(goal)
-      const budget=parsedBudget?.amount??constitution.budget
       const requirements=searchMissionRequirements(goal,budget)
       const candidates=requirements.flatMap(r=>r.products)
       const unique=Array.from(new Map(candidates.map(p=>[p.id,p])).values())
@@ -61,18 +69,22 @@ export default function Mission(){
     }
   }
 
-  const noDealBudget=parseMissionBudget(goal)?.amount??constitution.budget
   const missionStarted=running||approved||!!error||!!proposal
 
   return <main className="mission">
     <header className="mission-header"><div><span className="eyebrow">AEON · MISSION CONTROL</span><h1>Your agent is {approved?'released':running?'working':'waiting'}.</h1></div><div className="mission-id">AEON-001</div></header>
     <section className={`mission-input panel ${missionStarted?'mission-input-active':''}`}>
       <label htmlFor="goal">What do you want your agent to do?</label>
-      <div className="input-row"><input id="goal" value={goal} onChange={e=>setGoal(e.target.value)} placeholder="e.g. Find me a phone under ₦500,000 and negotiate the best deal"/><button className="primary tactile-button" onClick={runMission}>Deploy agent →</button></div>
+      <textarea id="goal" value={goal} onChange={e=>setGoal(e.target.value)} placeholder="e.g. Find me a phone under ₦500,000 and negotiate the best deal" rows={3}/>
+      {!missionStarted&&!hasExplicitCeiling&&<div className="ceiling-picker" aria-label="Choose a price ceiling">
+        <div className="ceiling-copy"><span>PRICE CEILING</span><strong>₦{(activeBudget||selectedCeiling).toLocaleString()}</strong><small>Set this only when your request does not already include a price.</small></div>
+        <div className="ceiling-options">{CEILING_PRESETS.map(value=><button type="button" key={value} className={selectedCeiling===value&&!customCeiling?'selected':''} onClick={()=>{setSelectedCeiling(value);setCustomCeiling('')}}>₦{value>=1000000?`${value/1000000}m`:`${value/1000}k`}</button>)}<input aria-label="Custom price ceiling" inputMode="numeric" value={customCeiling} onChange={e=>setCustomCeiling(e.target.value.replace(/[^0-9]/g,''))} placeholder="Custom"/></div>
+      </div>}
+      <div className="mission-input-footer"><span className="input-hint">{hasExplicitCeiling?`Ceiling detected: ₦${parsedBudget!.amount.toLocaleString()}`:'AEON will use this ceiling for the mission.'}</span><button className="primary tactile-button deploy-button" onClick={runMission} disabled={!goal.trim()||(!hasExplicitCeiling&&!activeBudget)}>Deploy agent →</button></div>
     </section>
     {missionStarted&&<>
       <AgentJourneyGamified phase={phase} running={running} approved={approved} products={products} proposal={proposal}/>
-      {error&&<NoDealPanel budget={noDealBudget} candidates={products} onIncreaseBudget={b=>setConstitution(c=>({...c,budget:b}))} onChangeRules={()=>window.dispatchEvent(new CustomEvent('aeon:edit-rules'))} onRetry={runMission} onEnd={()=>{setError('');setProposal(null);setProducts([]);setPhase('SEARCHING')}}/>}
+      {error&&<NoDealPanel budget={parsedBudget?.amount??activeBudget} candidates={products} onIncreaseBudget={b=>setConstitution(c=>({...c,budget:b}))} onChangeRules={()=>window.dispatchEvent(new CustomEvent('aeon:edit-rules'))} onRetry={runMission} onEnd={()=>{setError('');setProposal(null);setProducts([]);setPhase('SEARCHING')}}/>}
       <div className="mission-support"><AgentConsole/><ConstitutionFirewall/></div>
     </>}
   </main>
