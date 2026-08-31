@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import './app.css'
 import './workspace.css'
 import './phase16-gamified-journey.css'
+import './mission-layout.css'
 import { initialMission, approveMission, MissionState } from './agent-loop'
 import AgentConsole from './agent-console'
 import ConstitutionFirewall from './constitution-firewall'
@@ -61,7 +62,7 @@ export default function Mission(){
   }
 
   const noDealBudget=parseMissionBudget(goal)?.amount??constitution.budget
-  const missionStarted=running||approved||!!error||!!proposal||goal.trim().length>0
+  const missionStarted=running||approved||!!error||!!proposal
 
   return <main className="mission">
     <header className="mission-header"><div><span className="eyebrow">AEON · MISSION CONTROL</span><h1>Your agent is {approved?'released':running?'working':'waiting'}.</h1></div><div className="mission-id">AEON-001</div></header>
