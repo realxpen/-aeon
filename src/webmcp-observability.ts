@@ -10,6 +10,9 @@ export type WebMCPTrace = {
 }
 
 const TRACE_EVENT = 'aeon:webmcp-trace'
+const RESET_EVENT = 'aeon:webmcp-trace-reset'
+
+export function resetWebMCPTrace() { window.dispatchEvent(new Event(RESET_EVENT)) }
 
 export function emitWebMCPTrace(trace: Omit<WebMCPTrace, 'id' | 'timestamp'>) {
   const full = { ...trace, id: `trace_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, timestamp: Date.now() }
@@ -17,10 +20,12 @@ export function emitWebMCPTrace(trace: Omit<WebMCPTrace, 'id' | 'timestamp'>) {
   return full
 }
 
-export function subscribeWebMCPTrace(listener: (trace: WebMCPTrace) => void) {
+export function subscribeWebMCPTrace(listener: (trace: WebMCPTrace) => void, onReset?: () => void) {
   const on = (e: Event) => listener((e as CustomEvent<WebMCPTrace>).detail)
+  const reset = () => onReset?.()
   window.addEventListener(TRACE_EVENT, on)
-  return () => window.removeEventListener(TRACE_EVENT, on)
+  window.addEventListener(RESET_EVENT, reset)
+  return () => { window.removeEventListener(TRACE_EVENT, on); window.removeEventListener(RESET_EVENT, reset) }
 }
 
 export async function executeObserved<T>(tool: string, input: unknown, execute: () => Promise<T>): Promise<T> {
