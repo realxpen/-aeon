@@ -3,11 +3,11 @@ import './app.css'
 import './workspace.css'
 import './phase16-gamified-journey.css'
 import './mission-layout.css'
-import { initialMission, MissionState } from './agent-loop'
 import AgentConsole from './agent-console'
 import ConstitutionFirewall from './constitution-firewall'
 import NoDealPanel from './no-deal-panel'
 import AgentJourneyGamified from './agent-journey-gamified'
+import { initialMission, MissionState } from './agent-loop'
 import { getMissionConstitution, saveMissionConstitution, MissionConstitution, parseMissionBudget, deriveMissionPriorities } from './mission-state'
 import { emitAgentActivity } from './agent-activity'
 import { executeObserved, setActiveMissionContext, clearActiveMissionContext } from './webmcp-observability'
@@ -42,9 +42,8 @@ export default function Mission(){
   useEffect(()=>{if(!missionStarted)return;const frame=window.requestAnimationFrame(()=>journeyRef.current?.scrollIntoView({behavior:'smooth',block:'start'}));return()=>window.cancelAnimationFrame(frame)},[running,missionStarted])
   const resetMissionForNewPrompt=()=>{setMission(initialMission());setProposal(null);setProducts([]);setError('');setInputIssue('');setRunning(false);setApproved(false);setPhase('SEARCHING');setSelectedCeiling(0);setCustomCeiling('');resumeBudgetRef.current=null;clearActiveMissionContext()}
   const handleGoalChange=(value:string)=>{setGoal(value);if(missionStarted)resetMissionForNewPrompt();else if(inputIssue)setInputIssue('')}
-  const chooseSurpriseCategory=(category:string)=>{const selected=surpriseCategories[category]??category;const missionGoal=`Find me a surprise ${selected} deal`;setGoal(missionGoal);setInputIssue('');setError('');setProposal(null);setProducts([]);setApproved(false);setRunning(false);setPhase('SEARCHING');window.setTimeout(()=>{const deploy=document.querySelector<HTMLButtonElement>('.deploy-button');if(deploy&&!deploy.disabled)deploy.click()},0)}
-  const runMission=async(overrideBudget?:number)=>{
-    const missionGoal=goal.trim();if(!missionGoal)return
+  const runMission=async(goalOverride?:string,overrideBudget?:number)=>{
+    const missionGoal=(goalOverride??goal).trim();if(!missionGoal)return
     const parsed=parseMissionBudget(missionGoal);const budget=overrideBudget??(parsed?.amount??(customCeiling?Number(customCeiling):selectedCeiling||0));const priorities=deriveMissionPriorities(missionGoal);const inputClass=classifyMissionInput(missionGoal)
     if(inputClass==='invalid'){setInputIssue('invalid');setRunning(false);setPhase('INVALID REQUEST');return}
     if(inputClass==='ambiguous'){setInputIssue('ambiguous');setRunning(false);setPhase('CLARIFICATION REQUIRED');return}
@@ -69,7 +68,8 @@ export default function Mission(){
       setProposal({products:basketProducts,deals,total,saving});setPhase('CONSTITUTION CHECK');await new Promise(r=>setTimeout(r,2400));setPhase('HUMAN APPROVAL');setRunning(false);emitAgentActivity('Purchase blocked: human approval required','request_purchase_approval')
     }catch(e){const failure=e as Error & {code?:string};setError(failure.message||'Mission failed');setRunning(false);if(failure.code==='UNAVAILABLE'||failure.message==='NO_MATCHING_PRODUCTS'){setInputIssue('unavailable');setPhase('NO MATCHING PRODUCTS')}else{setInputIssue('noDeal');setPhase('NO COMPLIANT DEAL')}}
   }
-  const authorizeHigherCeiling=(newBudget:number)=>{resumeBudgetRef.current=newBudget;const next={...constitution,budget:newBudget,goal:goal.trim(),canNegotiate:true,purchaseRequiresApproval:true};setConstitution(next);setSelectedCeiling(newBudget);setCustomCeiling('');setError('');setInputIssue('');setProposal(null);setApproved(false);setPhase('SEARCHING');setRunning(true);emitAgentActivity(`Human authorized a new ceiling of ₦${newBudget.toLocaleString()}. Resuming mission.`,'human_authorization');window.setTimeout(()=>runMission(newBudget),0)}
+  const chooseSurpriseCategory=(category:string)=>{const selected=surpriseCategories[category]??category;const missionGoal=`Find me a surprise ${selected} deal`;setGoal(missionGoal);setInputIssue('');setError('');setProposal(null);setProducts([]);setApproved(false);setPhase('SEARCHING');setRunning(true);void runMission(missionGoal)}
+  const authorizeHigherCeiling=(newBudget:number)=>{resumeBudgetRef.current=newBudget;const next={...constitution,budget:newBudget,goal:goal.trim(),canNegotiate:true,purchaseRequiresApproval:true};setConstitution(next);setSelectedCeiling(newBudget);setCustomCeiling('');setError('');setInputIssue('');setProposal(null);setApproved(false);setPhase('SEARCHING');setRunning(true);emitAgentActivity(`Human authorized a new ceiling of ₦${newBudget.toLocaleString()}. Resuming mission.`,'human_authorization');window.setTimeout(()=>runMission(undefined,newBudget),0)}
   const nearestOverBudget=products[0]
   return <main className={`mission ${missionStarted?'mission-running':''}`}>
     <header className="mission-header"><div><span className="eyebrow">AEON · MISSION CONTROL</span><h1>Your agent is {approved?'released':running?'working':'waiting'}.</h1></div><div className="mission-id">AEON-001</div></header>
