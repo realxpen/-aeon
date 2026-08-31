@@ -68,7 +68,15 @@ export default function Mission(){
       setProposal({products:basketProducts,deals,total,saving});setPhase('CONSTITUTION CHECK');await new Promise(r=>setTimeout(r,2400));setPhase('HUMAN APPROVAL');setRunning(false);emitAgentActivity('Purchase blocked: human approval required','request_purchase_approval')
     }catch(e){const failure=e as Error & {code?:string};setError(failure.message||'Mission failed');setRunning(false);if(failure.code==='UNAVAILABLE'||failure.message==='NO_MATCHING_PRODUCTS'){setInputIssue('unavailable');setPhase('NO MATCHING PRODUCTS')}else{setInputIssue('noDeal');setPhase('NO COMPLIANT DEAL')}}
   }
-  const chooseSurpriseCategory=(category:string)=>{const selected=surpriseCategories[category]??category;const missionGoal=`Find me a surprise ${selected} deal`;setGoal(missionGoal);setInputIssue('');setError('');setProposal(null);setProducts([]);setApproved(false);setPhase('SEARCHING');setRunning(true);void runMission(missionGoal)}
+  const chooseSurpriseCategory=async(category:string)=>{
+    const selected=surpriseCategories[category]??category
+    // Category selection is a committed user decision. Do not route it back through the
+    // generic "surprise" ambiguity guard; that guard is only for an unqualified Surprise Me.
+    // Use a concrete commerce mission for the engine while preserving the selected category.
+    const missionGoal=`Find me a deal in ${selected}`
+    setGoal(missionGoal);setInputIssue('');setError('');setProposal(null);setProducts([]);setApproved(false);setPhase('SEARCHING');setRunning(true)
+    await runMission(missionGoal)
+  }
   const authorizeHigherCeiling=(newBudget:number)=>{resumeBudgetRef.current=newBudget;const next={...constitution,budget:newBudget,goal:goal.trim(),canNegotiate:true,purchaseRequiresApproval:true};setConstitution(next);setSelectedCeiling(newBudget);setCustomCeiling('');setError('');setInputIssue('');setProposal(null);setApproved(false);setPhase('SEARCHING');setRunning(true);emitAgentActivity(`Human authorized a new ceiling of ₦${newBudget.toLocaleString()}. Resuming mission.`,'human_authorization');window.setTimeout(()=>runMission(undefined,newBudget),0)}
   const nearestOverBudget=products[0]
   return <main className={`mission ${missionStarted?'mission-running':''}`}>
