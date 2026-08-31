@@ -58,22 +58,32 @@ export default function Mission(){
     emitAgentActivity(`Mission accepted: “${missionGoal}” · ceiling ${budget?`₦${budget.toLocaleString()}`:'none'}`,'Mission engine')
     const multiRequest=multiProductPattern.test(missionGoal)
     try{
-      const requirements=await executeObserved('search_products',{query:missionGoal,maxPrice:budget||null},async()=>searchMissionRequirements(missionGoal,budget||undefined));const candidates=requirements.flatMap(r=>r.products);const unique=Array.from(new Map(candidates.map(p=>[p.id,p])).values());const found=rankForMission(unique,priorities).filter(p=>!budget||p.price<=budget).slice(0,multiRequest?8:5)
+      const requirements=await executeObserved('search_products',{query:missionGoal,maxPrice:budget||null},async()=>searchMissionRequirements(missionGoal,budget||undefined));const candidates=requirements.flatMap(r=>r.products);const unique=Array.from(new Map(candidates.map(p=>[p.id,p])).values());const found=rankForMission(unique,priorities).filter(p=>!budget||p.price<=budget).slice(0,multiRequest?10:5)
       if(found.length===0)throw Object.assign(new Error('NO_MATCHING_PRODUCTS'),{code:'UNAVAILABLE'})
-      const negotiationPool=multiRequest?found:found.slice(0,1);setProducts(found);setPhase('ANALYZING');await new Promise(r=>setTimeout(r,2600));await executeObserved('compare_products',{productIds:found.map(p=>p.id),priorities,budget:budget||null},async()=>rankForMission(found,priorities));setPhase('NEGOTIATING')
+      setProducts(found);setPhase('ANALYZING');await new Promise(r=>setTimeout(r,2600));await executeObserved('compare_products',{productIds:found.map(p=>p.id),priorities,budget:budget||null},async()=>rankForMission(found,priorities));setPhase('NEGOTIATING')
+
+      // For setup/kit missions, build a real basket: one primary product per category,
+      // rather than accidentally selecting multiple phones or duplicate categories.
+      const negotiationPool=multiRequest
+        ? Array.from(new Map(found.map(product=>[product.category,product])).values())
+        : found.slice(0,1)
       const negotiated:{product:Product;deal:NegotiationResult}[]=[]
       for(const product of negotiationPool){await new Promise(r=>setTimeout(r,1300));const deal=await executeObserved('negotiate_offer',{productId:product.id,product:product.name,listedPrice:product.price,budget:budget||null},async()=>{emitAgentActivity(`Seller agent contacted: ${product.name}`,'seller_agent');return negotiate(product,budget,activeConstitution)});negotiated.push({product,deal});await new Promise(r=>setTimeout(r,2200))}
-      const compliant=negotiated.filter(x=>x.deal.status==='approved'&&(!budget||x.deal.acceptedPrice<=budget))
+
+      // A non-negotiable item is still a valid deal at its listed price. Only an
+      // actual constitutional rejection should remove it from basket eligibility.
+      const compliant=negotiated.filter(x=>(x.deal.status==='approved'||x.deal.reason==='NEGOTIATION_NOT_NEEDED')&&(!budget||x.deal.acceptedPrice<=budget))
       let selected=compliant
       if(multiRequest&&budget>0){
-        const ranked=[...compliant].sort((a,b)=>{
-          const aRequired=/phone|smartphone|iphone|mobile/i.test(a.product.category+' '+a.product.name)?1:0
-          const bRequired=/phone|smartphone|iphone|mobile/i.test(b.product.category+' '+b.product.name)?1:0
-          return bRequired-aRequired || b.product.rating-a.product.rating
-        })
+        const categoryPriority=(category:string)=>({Phone:5,Camera:4,Microphone:3,Lighting:2,Support:1}[category]??0)
+        const ranked=[...compliant].sort((a,b)=>categoryPriority(b.product.category)-categoryPriority(a.product.category)||b.product.rating-a.product.rating||b.product.performance-a.product.performance)
         selected=[]
         let runningTotal=0
-        for(const item of ranked){if(runningTotal+item.deal.acceptedPrice<=budget){selected.push(item);runningTotal+=item.deal.acceptedPrice}}
+        for(const item of ranked){
+          // One item per category is intentional: a "setup" means complementary equipment.
+          if(selected.some(existing=>existing.product.category===item.product.category))continue
+          if(runningTotal+item.deal.acceptedPrice<=budget){selected.push(item);runningTotal+=item.deal.acceptedPrice}
+        }
       }
       if(selected.length===0)throw Object.assign(new Error('NO_COMPLIANT_DEAL'),{code:'NODEAL'})
       const basketProducts=multiRequest?selected.map(x=>x.product):[selected[0].product];const deals=multiRequest?selected.map(x=>x.deal):[selected[0].deal];const total=deals.reduce((s,d)=>s+d.acceptedPrice,0);const saving=deals.reduce((s,d)=>s+d.saving,0);if(budget>0&&total>budget)throw Object.assign(new Error('NO_COMPLIANT_DEAL'),{code:'NODEAL'})
