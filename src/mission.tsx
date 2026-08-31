@@ -43,8 +43,7 @@ export default function Mission(){
   },[])
 
   const resetMissionForNewPrompt=()=>{
-    setMission(initialMission())
-    setProposal(null);setProducts([]);setError('');setInputIssue('');setRunning(false);setApproved(false);setPhase('SEARCHING')
+    setMission(initialMission());setProposal(null);setProducts([]);setError('');setInputIssue('');setRunning(false);setApproved(false);setPhase('SEARCHING')
     setSelectedCeiling(0);setCustomCeiling('');resetWebMCPTrace()
   }
 
@@ -61,6 +60,7 @@ export default function Mission(){
       setInputIssue('invalid');setError('');setProposal(null);setProducts([]);setRunning(false);setPhase('INVALID REQUEST');return
     }
     const budget=activeBudget
+    const multiRequest=isMultiProductRequest
     setRunning(true);setApproved(false);setError('');setInputIssue('');setProposal(null);setProducts([]);setPhase('SEARCHING')
     emitAgentActivity('Mission accepted','Mission engine event')
     try{
@@ -68,12 +68,11 @@ export default function Mission(){
       const candidates=requirements.flatMap(r=>r.products)
       const unique=Array.from(new Map(candidates.map(p=>[p.id,p])).values())
       const priorities=constitution.priorities.length?constitution.priorities:[]
-      const found=rankForMission(unique,priorities).slice(0,isMultiProductRequest?8:5)
-      if(found.length===0){setInputIssue('unavailable');throw new Error('NO_MATCHING_PRODUCTS')}
-      const negotiationPool=isMultiProductRequest?found:found.slice(0,1)
+      const found=rankForMission(unique,priorities).slice(0,multiRequest?8:5)
+      if(found.length===0)throw Object.assign(new Error('NO_MATCHING_PRODUCTS'),{code:'UNAVAILABLE'})
+      const negotiationPool=multiRequest?found:found.slice(0,1)
       setProducts(found)
-      setPhase('ANALYZING')
-      await new Promise(r=>setTimeout(r,2600))
+      setPhase('ANALYZING');await new Promise(r=>setTimeout(r,2600))
       await executeObserved('compare_products',{productIds:found.map(p=>p.id),priorities},async()=>rankForMission(found,priorities))
       setPhase('NEGOTIATING')
       const negotiated: {product:Product;deal:NegotiationResult}[]=[]
@@ -86,20 +85,23 @@ export default function Mission(){
         negotiated.push({product,deal})
         await new Promise(r=>setTimeout(r,2200))
       }
-      const selected=isMultiProductRequest
+      const selected=multiRequest
         ? negotiated.filter(x=>!activeBudget||x.deal.acceptedPrice<=activeBudget).sort((a,b)=>a.deal.acceptedPrice-b.deal.acceptedPrice)
         : negotiated.filter(x=>!activeBudget||x.deal.acceptedPrice<=activeBudget)
-      if(selected.length===0){setInputIssue('noDeal');throw new Error('NO_COMPLIANT_DEAL')}
-      const basketProducts=isMultiProductRequest?selected.map(x=>x.product):[selected[0].product]
-      const deals=isMultiProductRequest?selected.map(x=>x.deal):[selected[0].deal]
+      if(selected.length===0)throw Object.assign(new Error('NO_COMPLIANT_DEAL'),{code:'NODEAL'})
+      const basketProducts=multiRequest?selected.map(x=>x.product):[selected[0].product]
+      const deals=multiRequest?selected.map(x=>x.deal):[selected[0].deal]
       const total=deals.reduce((s,d)=>s+d.acceptedPrice,0)
       const saving=deals.reduce((s,d)=>s+d.saving,0)
-      if(activeBudget>0&&total>activeBudget){setInputIssue('noDeal');throw new Error('NO_COMPLIANT_DEAL')}
+      if(activeBudget>0&&total>activeBudget)throw Object.assign(new Error('NO_COMPLIANT_DEAL'),{code:'NODEAL'})
       setProposal({products:basketProducts,deals,total,saving})
       setPhase('CONSTITUTION CHECK');await new Promise(r=>setTimeout(r,2400))
       setPhase('HUMAN APPROVAL');setRunning(false);emitAgentActivity('Purchase blocked: human approval required','request_purchase_approval')
     }catch(e){
-      const message=e instanceof Error?e.message:'Mission failed';setError(message);setRunning(false);setPhase(inputIssue==='unavailable'?'NO MATCHING PRODUCTS':'NO COMPLIANT DEAL')
+      const failure=e as Error & {code?:string}
+      setError(failure.message||'Mission failed');setRunning(false)
+      if(failure.code==='UNAVAILABLE'||failure.message==='NO_MATCHING_PRODUCTS'){setInputIssue('unavailable');setPhase('NO MATCHING PRODUCTS')}
+      else{setInputIssue('noDeal');setPhase('NO COMPLIANT DEAL')}
     }
   }
 
