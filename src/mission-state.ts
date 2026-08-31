@@ -1,7 +1,7 @@
 export type MissionConstitution={goal:string;budget:number;canNegotiate:boolean;purchaseRequiresApproval:boolean;priorities:string[]}
 export type ParsedBudget={amount:number;scope:'total'|'item';source:string}
 const KEY='aeon:active-mission'
-const defaults:MissionConstitution={goal:'Build the best creator setup under ₦1,000,000.',budget:1000000,canNegotiate:true,purchaseRequiresApproval:true,priorities:['performance','audio quality']}
+const defaults:MissionConstitution={goal:'Build the best creator setup.',budget:0,canNegotiate:true,purchaseRequiresApproval:true,priorities:['performance','audio quality']}
 const priorityRules:[RegExp,string][]=[
 [/\b(phone|smartphone|iphone|mobile)\b/i,'smartphone fit'],[/\b(camera|filming|photography|photograph|video)\b/i,'image/video quality'],[/\b(audio|microphone|mic|podcast|recording|sound)\b/i,'audio quality'],[/\b(laptop|computer|pc|coding|programming|developer|development)\b/i,'performance'],[/\b(battery|battery life)\b/i,'battery life'],[/\b(cheap|cheapest|affordable|lowest price|budget)\b/i,'price'],[/\b(creator|content|studio|streaming|streamer)\b/i,'creator workflow']]
 export function deriveMissionPriorities(goal:string):string[]{const q=goal.trim();const found=priorityRules.filter(([rule])=>rule.test(q)).map(([,label])=>label);return found.length?[...new Set(found)]:['mission fit','value for budget']}
