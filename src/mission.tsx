@@ -26,7 +26,7 @@ export default function Mission(){
   const [running,setRunning]=useState(false)
   const [approved,setApproved]=useState(false)
   const [error,setError]=useState('')
-  const [inputIssue,setInputIssue]=useState<'invalid'|'unavailable'|'noDeal'|''>('')
+  const [inputIssue,setInputIssue]=useState<'invalid'|'ambiguous'|'unavailable'|'noDeal'|''>('')
   const [selectedCeiling,setSelectedCeiling]=useState(0)
   const [customCeiling,setCustomCeiling]=useState('')
   const journeyRef=useRef<HTMLElement|null>(null)
@@ -34,7 +34,6 @@ export default function Mission(){
   const hasExplicitCeiling=!!parsedBudget
   const manualCeiling=customCeiling?Number(customCeiling):selectedCeiling
   const activeBudget=parsedBudget?.amount??(manualCeiling||0)
-  const isMultiProductRequest=multiProductPattern.test(goal)
   const missionStarted=running||approved||!!error||!!proposal||!!inputIssue
   useEffect(()=>{saveMissionConstitution(constitution)},[constitution])
   useEffect(()=>{
@@ -43,22 +42,19 @@ export default function Mission(){
     window.addEventListener('aeon:approve-mission',approve);window.addEventListener('aeon:decline-mission',decline)
     return()=>{window.removeEventListener('aeon:approve-mission',approve);window.removeEventListener('aeon:decline-mission',decline)}
   },[])
-  useEffect(()=>{
-    if(!missionStarted)return
-    const frame=window.requestAnimationFrame(()=>journeyRef.current?.scrollIntoView({behavior:'smooth',block:'start'}))
-    return()=>window.cancelAnimationFrame(frame)
-  },[running,missionStarted])
+  useEffect(()=>{if(!missionStarted)return;const frame=window.requestAnimationFrame(()=>journeyRef.current?.scrollIntoView({behavior:'smooth',block:'start'}));return()=>window.cancelAnimationFrame(frame)},[running,missionStarted])
   const resetMissionForNewPrompt=()=>{setMission(initialMission());setProposal(null);setProducts([]);setError('');setInputIssue('');setRunning(false);setApproved(false);setPhase('SEARCHING');setSelectedCeiling(0);setCustomCeiling('');clearActiveMissionContext()}
   const handleGoalChange=(value:string)=>{setGoal(value);if(missionStarted)resetMissionForNewPrompt();else if(inputIssue)setInputIssue('')}
   const runMission=async()=>{
     const missionGoal=goal.trim();if(!missionGoal)return
-    const parsed=parseMissionBudget(missionGoal);const budget=parsed?.amount??(customCeiling?Number(customCeiling):selectedCeiling||0);const priorities=deriveMissionPriorities(missionGoal)
+    const parsed=parseMissionBudget(missionGoal);const budget=parsed?.amount??(customCeiling?Number(customCeiling):selectedCeiling||0);const priorities=deriveMissionPriorities(missionGoal);const inputClass=classifyMissionInput(missionGoal)
+    if(inputClass==='invalid'){setInputIssue('invalid');setRunning(false);setPhase('INVALID REQUEST');return}
+    if(inputClass==='ambiguous'){setInputIssue('ambiguous');setRunning(false);setPhase('CLARIFICATION REQUIRED');return}
     const missionId=`AEON-${Date.now()}-${Math.random().toString(36).slice(2,7).toUpperCase()}`
     setActiveMissionContext({id:missionId,goal:missionGoal,budget,canNegotiate:true,purchaseRequiresApproval:true})
     setConstitution(c=>({...c,goal:missionGoal,budget,canNegotiate:true,purchaseRequiresApproval:true,priorities}))
     setMission(initialMission());setProposal(null);setProducts([]);setError('');setInputIssue('');setRunning(true);setApproved(false);setPhase('SEARCHING')
     emitAgentActivity(`Mission accepted: “${missionGoal}” · ceiling ${budget?`₦${budget.toLocaleString()}`:'none'}`,'Mission engine')
-    if(classifyMissionInput(missionGoal)==='invalid'){setInputIssue('invalid');setRunning(false);setPhase('INVALID REQUEST');return}
     const multiRequest=multiProductPattern.test(missionGoal)
     try{
       const requirements=await executeObserved('search_products',{query:missionGoal,maxPrice:budget||null},async()=>searchMissionRequirements(missionGoal,budget||undefined));const candidates=requirements.flatMap(r=>r.products);const unique=Array.from(new Map(candidates.map(p=>[p.id,p])).values());const found=rankForMission(unique,priorities).filter(p=>!budget||p.price<=budget).slice(0,multiRequest?8:5)
@@ -73,9 +69,7 @@ export default function Mission(){
   }
   return <main className={`mission ${missionStarted?'mission-running':''}`}>
     <header className="mission-header"><div><span className="eyebrow">AEON · MISSION CONTROL</span><h1>Your agent is {approved?'released':running?'working':'waiting'}.</h1></div><div className="mission-id">AEON-001</div></header>
-    <section className={`mission-input panel ${missionStarted?'mission-input-active':''}`}><label htmlFor="goal">What do you want your agent to do?</label><textarea id="goal" value={goal} onChange={e=>handleGoalChange(e.target.value)} placeholder="e.g. Find me a phone under ₦500,000 and negotiate the best deal" rows={3}/>{!missionStarted&&!hasExplicitCeiling&&<div className="ceiling-picker" aria-label="Choose a price ceiling"><div className="ceiling-copy"><span>PRICE CEILING</span><strong>{activeBudget?`₦${activeBudget.toLocaleString()}`:'No ceiling'}</strong><small>{activeBudget?'Applied only because you selected it.':'Optional — leave empty to let AEON search without a price limit.'}</small></div><div className="ceiling-options">{CEILING_PRESETS.map(value=><button type="button" key={value} className={selectedCeiling===value&&!customCeiling?'selected':''} onClick={()=>{setSelectedCeiling(value);setCustomCeiling('')}}>₦{value>=1000000?`${value/1000000}m`:`${value/1000}k`}</button>)}<input aria-label="Custom price ceiling" inputMode="numeric" value={customCeiling} onChange={e=>{setCustomCeiling(e.target.value.replace(/[^0-9]/g,''));setSelectedCeiling(0)}} placeholder="Custom"/></div></div>}<div className="mission-input-footer"><span className="input-hint">{hasExplicitCeiling?`Ceiling detected from your request: ₦${parsedBudget!.amount.toLocaleString()}`:activeBudget?`Ceiling selected: ₦${activeBudget.toLocaleString()}`:'No price ceiling — AEON will not impose one.'}</span><button className="primary tactile-button deploy-button" onClick={runMission} disabled={!goal.trim()}>Deploy agent →</button></div></section>
-    {inputIssue==='invalid'&&<section className="panel no-deal"><div className="kicker">MISSION INPUT</div><h2>I couldn't understand that request.</h2><p>Try telling AEON what you want to buy or accomplish, for example: “Find me a phone under ₦500,000.” Random or incomplete text will not trigger a marketplace search.</p><button className="primary-action" onClick={()=>document.getElementById('goal')?.focus()}>EDIT REQUEST →</button></section>}
-    {inputIssue==='unavailable'&&<section className="panel no-deal"><div className="kicker">MARKETPLACE RESULT</div><h2>No matching product found.</h2><p>AEON understood the request, but the connected marketplace does not currently have a suitable match within your stated constraints. It will not silently replace your requested product with an unrelated item.</p><button className="primary-action" onClick={()=>document.getElementById('goal')?.focus()}>TRY ANOTHER REQUEST →</button></section>}
+    <section className={`mission-input panel ${missionStarted?'mission-input-active':''}`}><label htmlFor="goal">What do you want your agent to do?</label><textarea id="goal" value={goal} onChange={e=>handleGoalChange(e.target.value)} placeholder="e.g. Find me a phone under ₦500,000 and negotiate the best deal" rows={3}/>{!missionStarted&&!hasExplicitCeiling&&<div className="ceiling-picker" aria-label="Choose a price ceiling"><div className="ceiling-copy"><span>PRICE CEILING</span><strong>{activeBudget?`₦${activeBudget.toLocaleString()}`:'No ceiling'}</strong><small>{activeBudget?'Applied only because you selected it.':'Optional — leave empty to let AEON search without a price limit.'}</small></div><div className="ceiling-options">{CEILING_PRESETS.map(value=><button type="button" key={value} className={selectedCeiling===value&&!customCeiling?'selected':''} onClick={()=>{setSelectedCeiling(value);setCustomCeiling('')}}>₦{value>=1000000?`${value/1000000}m`:`${value/1000}k`}</button>)}<input aria-label="Custom price ceiling" inputMode="numeric" value={customCeiling} onChange={e=>{setCustomCeiling(e.target.value.replace(/[^0-9]/g,''));setSelectedCeiling(0)}} placeholder="Custom"/></div></div>}{inputIssue==='ambiguous'&&<div className="panel no-deal"><div className="kicker">MISSION CLARIFICATION</div><h2>I can surprise you — but I need a category first.</h2><p>Choose what you want AEON to shop for. AEON will not invent a category or spending authority on your behalf.</p><div className="ceiling-options"><button type="button" onClick={()=>setGoal('electronics')}>Electronics</button><button type="button" onClick={()=>setGoal('fashion')}>Fashion</button><button type="button" onClick={()=>setGoal('home')}>Home</button><button type="button" onClick={()=>setGoal('gifts')}>Gifts</button></div></div>}{inputIssue==='invalid'&&<section className="panel no-deal"><div className="kicker">MISSION INPUT</div><h2>I couldn't understand that request.</h2><p>Try telling AEON what you want to buy, for example: “Find me a phone under ₦500,000.” Random or incomplete text will not trigger a marketplace search.</p><button className="primary-action" onClick={()=>document.getElementById('goal')?.focus()}>EDIT REQUEST →</button></section>}{inputIssue==='unavailable'&&<section className="panel no-deal"><div className="kicker">MARKETPLACE RESULT</div><h2>No matching product found.</h2><p>AEON understood the request, but the connected marketplace does not currently have a suitable match within your stated constraints.</p><button className="primary-action" onClick={()=>document.getElementById('goal')?.focus()}>TRY ANOTHER REQUEST →</button></section>}<div className="mission-input-footer"><span className="input-hint">{hasExplicitCeiling?`Ceiling detected from your request: ₦${parsedBudget!.amount.toLocaleString()}`:activeBudget?`Ceiling selected: ₦${activeBudget.toLocaleString()}`:'No price ceiling — AEON will not impose one.'}</span><button className="primary tactile-button deploy-button" onClick={runMission} disabled={!goal.trim()}>Deploy agent →</button></div></section>
     {missionStarted&&inputIssue===''&&<><section ref={journeyRef}><AgentJourneyGamified phase={phase} running={running} approved={approved} products={products} proposal={proposal} goal={goal} budget={activeBudget}/></section>{error&&<NoDealPanel budget={parsedBudget?.amount??activeBudget} candidates={products} onIncreaseBudget={b=>setConstitution(c=>({...c,budget:b}))} onChangeRules={()=>window.dispatchEvent(new CustomEvent('aeon:edit-rules'))} onRetry={runMission} onEnd={()=>{resetMissionForNewPrompt();setGoal('')}}/>}<div className="mission-support"><AgentConsole/><ConstitutionFirewall/></div></>}
   </main>
 }
