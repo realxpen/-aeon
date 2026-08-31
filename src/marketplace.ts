@@ -14,8 +14,27 @@ export const catalog:Product[]=[
 {id:'phone-03',name:'AEON Lite Phone',category:'Phone',price:229000,originalPrice:249000,merchant:'AEON Marketplace',rating:4.5,performance:82,audio:84,stock:20,negotiable:false}
 ]
 const aliases:Record<string,string>={smartphone:'Phone',iphone:'Phone',mobile:'Phone',phone:'Phone',camera:'Camera',microphone:'Microphone',mic:'Microphone',lighting:'Lighting',light:'Lighting',tripod:'Support',support:'Support','creator kit':'Creator Kit'}
-const normalized=(q:string)=>q.trim().toLowerCase()
-export function searchCatalog(query:string,maxPrice?:number){const q=normalized(query);const exact=aliases[q]??(aliases[Object.keys(aliases).find(k=>q.includes(k))??'']??'');if(exact)return catalog.filter(p=>p.category===exact&&(!maxPrice||p.price<=maxPrice)).sort((a,b)=>b.rating-a.rating);const tokens=q.split(/\s+/).filter(Boolean);return catalog.filter(p=>(!maxPrice||p.price<=maxPrice)&&tokens.some(t=>[p.name,p.category,p.merchant].join(' ').toLowerCase().includes(t))).sort((a,b)=>b.rating-a.rating)}
+const stopWords=new Set(['i','need','want','a','an','the','me','my','for','to','please','find','get','buy','looking','look','can','you','could','would','and','under','below','less','than','with','best','deal','price','good','some','of'])
+const normalized=(q:string)=>q.trim().toLowerCase().replace(/[^a-z0-9₦\s]/g,' ')
+const meaningfulTokens=(q:string)=>normalized(q).split(/\s+/).filter(t=>t&&!stopWords.has(t)&&!/^\d+$/.test(t)&&t!=='₦')
+
+/** Distinguishes malformed/gibberish input from a valid shopping intent. */
+export function classifyMissionInput(goal:string):'valid'|'invalid'{
+ const q=normalized(goal)
+ if(!q.trim())return 'invalid'
+ const tokens=meaningfulTokens(q)
+ if(tokens.length<1)return 'invalid'
+ // Recognized marketplace categories/aliases always count as valid intent.
+ if(Object.keys(aliases).some(k=>q.includes(k)))return 'valid'
+ // A normal product request needs at least one plausible product noun/descriptor.
+ // Reject obvious keyboard-smash / repeated-character input rather than searching loosely.
+ const hasWordLikeToken=tokens.some(t=>/[aeiou]/.test(t)&&t.length>=3)
+ const repeated=tokens.filter(t=>/(.)\1\1/.test(t)).length
+ if(!hasWordLikeToken||repeated>=2)return 'invalid'
+ return 'valid'
+}
+
+export function searchCatalog(query:string,maxPrice?:number){const q=normalized(query);const exact=aliases[q]??(aliases[Object.keys(aliases).find(k=>q.includes(k))??'']??'');if(exact)return catalog.filter(p=>p.category===exact&&(!maxPrice||p.price<=maxPrice)).sort((a,b)=>b.rating-a.rating);const tokens=meaningfulTokens(q);return catalog.filter(p=>(!maxPrice||p.price<=maxPrice)&&tokens.some(t=>[p.name,p.category,p.merchant].join(' ').toLowerCase().includes(t))).sort((a,b)=>b.rating-a.rating)}
 export type MissionRequirement={category:string;label:string;required:true;products:Product[];cheapest?:Product}
 export function searchMissionRequirements(goal:string,budget?:number):MissionRequirement[]{const q=normalized(goal);const categories:string[]=[];if(/creator|content|studio|audio|video|stream/i.test(q))categories.push('Camera','Microphone','Lighting','Support');if(/phone|smartphone|iphone|mobile/i.test(q))categories.push('Phone');if(/camera/i.test(q)&&!categories.includes('Camera'))categories.push('Camera');if(/microphone|mic/i.test(q)&&!categories.includes('Microphone'))categories.push('Microphone');if(/light|lighting/i.test(q)&&!categories.includes('Lighting'))categories.push('Lighting');if(/tripod/i.test(q)&&!categories.includes('Support'))categories.push('Support');if(!categories.length){const products=searchCatalog(goal,budget);return products.length?[{category:'SEARCH',label:'Marketplace matches',required:true,products,cheapest:products[products.length-1]}]:[]}return categories.map(category=>{const products=searchCatalog(category,budget);const all=searchCatalog(category);return {category,label:category==='Phone'?'Smartphone':category,required:true,products,cheapest:all[all.length-1]}}).filter(r=>r.products.length>0)}
 export type NegotiationMessage={speaker:'AEON'|'SELLER AGENT'|'CONSTITUTION';text:string;price?:number;round:number}
