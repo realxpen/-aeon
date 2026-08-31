@@ -18,20 +18,25 @@ const stopWords=new Set(['i','need','want','a','an','the','me','my','for','to','
 const normalized=(q:string)=>q.trim().toLowerCase().replace(/[^a-z0-9₦\s]/g,' ')
 const meaningfulTokens=(q:string)=>normalized(q).split(/\s+/).filter(t=>t&&!stopWords.has(t)&&!/^\d+$/.test(t)&&t!=='₦')
 
-/** Distinguishes malformed/gibberish input from a valid shopping intent. */
+/** Classifies input before any marketplace search. Random, unrelated, empty, or clearly malformed text never becomes a mission. */
 export function classifyMissionInput(goal:string):'valid'|'invalid'{
- const q=normalized(goal)
- if(!q.trim())return 'invalid'
+ const raw=goal.trim()
+ if(!raw||raw.length>2000)return 'invalid'
+ const q=normalized(raw)
  const tokens=meaningfulTokens(q)
  if(tokens.length<1)return 'invalid'
- // Recognized marketplace categories/aliases always count as valid intent.
+ // Known commerce/product vocabulary is the strongest signal.
  if(Object.keys(aliases).some(k=>q.includes(k)))return 'valid'
- // A normal product request needs at least one plausible product noun/descriptor.
- // Reject obvious keyboard-smash / repeated-character input rather than searching loosely.
+ const productTerms=['laptop','computer','pc','tablet','headphone','headphones','earbuds','monitor','keyboard','mouse','console','tv','television','watch','printer','router','speaker','desk','chair','backpack','shoes','camera','microphone','tripod','light','phone','smartphone']
+ if(productTerms.some(term=>q.includes(term)))return 'valid'
+ // Generic commerce language without a product is not enough to start an agent.
+ const commerceVerb=/\b(find|search|get|buy|purchase|shop|shopping|order|compare|negotiate|looking for|recommend)\b/i.test(raw)
+ const commerceConstraint=/₦|\b(under|below|budget|maximum|max|ceiling|within|affordable|cheapest|lowest price)\b/i.test(raw)
+ if(!commerceVerb||!commerceConstraint)return 'invalid'
+ // Reject obvious keyboard-smash / repeated-character input.
  const hasWordLikeToken=tokens.some(t=>/[aeiou]/.test(t)&&t.length>=3)
  const repeated=tokens.filter(t=>/(.)\1\1/.test(t)).length
- if(!hasWordLikeToken||repeated>=2)return 'invalid'
- return 'valid'
+ return hasWordLikeToken&&repeated<2?'valid':'invalid'
 }
 
 export function searchCatalog(query:string,maxPrice?:number){const q=normalized(query);const exact=aliases[q]??(aliases[Object.keys(aliases).find(k=>q.includes(k))??'']??'');if(exact)return catalog.filter(p=>p.category===exact&&(!maxPrice||p.price<=maxPrice)).sort((a,b)=>b.rating-a.rating);const tokens=meaningfulTokens(q);return catalog.filter(p=>(!maxPrice||p.price<=maxPrice)&&tokens.some(t=>[p.name,p.category,p.merchant].join(' ').toLowerCase().includes(t))).sort((a,b)=>b.rating-a.rating)}
