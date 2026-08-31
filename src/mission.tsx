@@ -52,8 +52,8 @@ export default function Mission(){
       const found=rankForMission(unique,priorities).slice(0,8)
       if(found.length===0)throw new Error('NO_MATCHING_PRODUCTS')
       setProducts(found);emitAgentActivity(`${found.length} product candidates returned`,'WebMCP → search_products')
-      setPhase('ANALYZING');await new Promise(r=>setTimeout(r,900))
-      setPhase('NEGOTIATING');await new Promise(r=>setTimeout(r,900))
+      setPhase('ANALYZING');await new Promise(r=>setTimeout(r,2200))
+      setPhase('NEGOTIATING');await new Promise(r=>setTimeout(r,2200))
       const negotiated=found.map(product=>({product,deal:negotiate(product,budget,constitution)}))
       const selected=negotiated.filter(x=>!activeBudget||x.deal.acceptedPrice<=activeBudget).sort((a,b)=>a.deal.acceptedPrice-b.deal.acceptedPrice).slice(0,4)
       if(selected.length===0)throw new Error('NO_COMPLIANT_DEAL')
@@ -62,7 +62,7 @@ export default function Mission(){
       const total=deals.reduce((s,d)=>s+d.acceptedPrice,0)
       const saving=deals.reduce((s,d)=>s+d.saving,0)
       setProposal({products:basketProducts,deals,total,saving})
-      setPhase('CONSTITUTION CHECK');await new Promise(r=>setTimeout(r,900))
+      setPhase('CONSTITUTION CHECK');await new Promise(r=>setTimeout(r,2200))
       setPhase('HUMAN APPROVAL');setRunning(false);emitAgentActivity('Purchase blocked: human approval required','request_purchase_approval')
     }catch(e){
       const message=e instanceof Error?e.message:'Mission failed';setError(message);setRunning(false);setPhase('NO COMPLIANT DEAL')
@@ -71,7 +71,7 @@ export default function Mission(){
 
   const missionStarted=running||approved||!!error||!!proposal
 
-  return <main className="mission">
+  return <main className={`mission ${missionStarted?'mission-running':''}`}>
     <header className="mission-header"><div><span className="eyebrow">AEON · MISSION CONTROL</span><h1>Your agent is {approved?'released':running?'working':'waiting'}.</h1></div><div className="mission-id">AEON-001</div></header>
     <section className={`mission-input panel ${missionStarted?'mission-input-active':''}`}>
       <label htmlFor="goal">What do you want your agent to do?</label>
