@@ -17,6 +17,13 @@ const CEILING_PRESETS = [100000, 250000, 500000, 1000000]
 const multiProductPattern = /\b(setup|kit|bundle|basket|collection|complete|full|creator setup|content setup|studio setup|multiple|several|all[- ]in[- ]one)\b/i
 const surpriseCategories:Record<string,string>={electronics:'electronics',fashion:'fashion',home:'home',gifts:'gifts'}
 
+// These are presentation holds, not state-transition triggers. The underlying
+// operation must finish first; then the active journey card gets enough time
+// to be read before the mission advances to the next stage.
+const EVALUATE_PRESENTATION_MS=2800
+const GOVERN_PRESENTATION_MS=2800
+const holdForReadableStage=(ms:number)=>new Promise<void>(resolve=>window.setTimeout(resolve,ms))
+
 export default function Mission(){
   const [mission,setMission]=useState<MissionState>(()=>initialMission())
   const [constitution,setConstitution]=useState<MissionConstitution>(()=>getMissionConstitution())
@@ -56,7 +63,16 @@ export default function Mission(){
     try{
       const requirements=await executeObserved('search_products',{query:missionGoal,maxPrice:budget||null},async()=>searchMissionRequirements(missionGoal,budget||undefined));const candidates=requirements.flatMap(r=>r.products);const unique=Array.from(new Map(candidates.map(p=>[p.id,p])).values());const found=rankForMission(unique,priorities).filter(p=>!budget||p.price<=budget).slice(0,multiRequest?10:5)
       if(found.length===0){const nearest=findClosestOverBudget(missionGoal,budget);if(nearest)setProducts([nearest]);throw Object.assign(new Error('NO_MATCHING_PRODUCTS'),{code:'UNAVAILABLE'})}
-      setProducts(found);setPhase('ANALYZING');await new Promise(r=>setTimeout(r,2600));await executeObserved('compare_products',{productIds:found.map(p=>p.id),priorities,budget:budget||null},async()=>rankForMission(found,priorities));setPhase('NEGOTIATING')
+      setProducts(found)
+
+      // EVALUATE: perform the real comparison first, then keep the stage visible
+      // for a readable moment. The hold never decides completion; the comparison does.
+      setPhase('ANALYZING')
+      await executeObserved('compare_products',{productIds:found.map(p=>p.id),priorities,budget:budget||null},async()=>rankForMission(found,priorities))
+      emitAgentActivity(`Evaluation complete: ${found.length} mission-fit candidate${found.length===1?'':'s'} reviewed.`,'compare_products')
+      await holdForReadableStage(EVALUATE_PRESENTATION_MS)
+      setPhase('NEGOTIATING')
+
       const negotiationPool=multiRequest?Array.from(new Map(found.map(product=>[product.category,product])).values()):found.slice(0,1)
       const negotiated:{product:Product;deal:NegotiationResult}[]=[]
       for(const product of negotiationPool){await new Promise(r=>setTimeout(r,1300));const deal=await executeObserved('negotiate_offer',{productId:product.id,product:product.name,listedPrice:product.price,budget:budget||null},async()=>{emitAgentActivity(`Seller agent contacted: ${product.name}`,'seller_agent');return negotiate(product,budget,activeConstitution)});negotiated.push({product,deal});await new Promise(r=>setTimeout(r,2200))}
@@ -65,14 +81,19 @@ export default function Mission(){
       if(multiRequest&&budget>0){const categoryPriority=(category:string)=>({Phone:5,Camera:4,Microphone:3,Lighting:2,Support:1}[category]??0);const ranked=[...compliant].sort((a,b)=>categoryPriority(b.product.category)-categoryPriority(a.product.category)||b.product.rating-a.product.rating||b.product.performance-a.product.performance);selected=[];let runningTotal=0;for(const item of ranked){if(selected.some(existing=>existing.product.category===item.product.category))continue;if(runningTotal+item.deal.acceptedPrice<=budget){selected.push(item);runningTotal+=item.deal.acceptedPrice}}}
       if(selected.length===0)throw Object.assign(new Error('NO_COMPLIANT_DEAL'),{code:'NODEAL'})
       const basketProducts=multiRequest?selected.map(x=>x.product):[selected[0].product];const deals=multiRequest?selected.map(x=>x.deal):[selected[0].deal];const total=deals.reduce((s,d)=>s+d.acceptedPrice,0);const saving=deals.reduce((s,d)=>s+d.saving,0);if(budget>0&&total>budget)throw Object.assign(new Error('NO_COMPLIANT_DEAL'),{code:'NODEAL'})
-      setProposal({products:basketProducts,deals,total,saving});setPhase('CONSTITUTION CHECK');await new Promise(r=>setTimeout(r,2400));setPhase('HUMAN APPROVAL');setRunning(false);emitAgentActivity('Purchase blocked: human approval required','request_purchase_approval')
+      setProposal({products:basketProducts,deals,total,saving});setPhase('CONSTITUTION CHECK')
+
+      // GOVERN: the compliance decision is made before the presentation hold.
+      // This keeps governance truthful while giving the judge time to see the result.
+      const compliantTotal=total<=budget||budget===0
+      if(!compliantTotal)throw Object.assign(new Error('NO_COMPLIANT_DEAL'),{code:'NODEAL'})
+      emitAgentActivity(`Constitution check passed: ₦${total.toLocaleString()} is within the ₦${budget.toLocaleString()} ceiling.`,'govern')
+      await holdForReadableStage(GOVERN_PRESENTATION_MS)
+      setPhase('HUMAN APPROVAL');setRunning(false);emitAgentActivity('Purchase blocked: human approval required','request_purchase_approval')
     }catch(e){const failure=e as Error & {code?:string};setError(failure.message||'Mission failed');setRunning(false);if(failure.code==='UNAVAILABLE'||failure.message==='NO_MATCHING_PRODUCTS'){setInputIssue('unavailable');setPhase('NO MATCHING PRODUCTS')}else{setInputIssue('noDeal');setPhase('NO COMPLIANT DEAL')}}
   }
   const chooseSurpriseCategory=async(category:string)=>{
     const selected=surpriseCategories[category]??category
-    // Category selection is a committed user decision. Do not route it back through the
-    // generic "surprise" ambiguity guard; that guard is only for an unqualified Surprise Me.
-    // Use a concrete commerce mission for the engine while preserving the selected category.
     const missionGoal=`Find me a deal in ${selected}`
     setGoal(missionGoal);setInputIssue('');setError('');setProposal(null);setProducts([]);setApproved(false);setPhase('SEARCHING');setRunning(true)
     await runMission(missionGoal)
