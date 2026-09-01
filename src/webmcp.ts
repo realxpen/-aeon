@@ -13,35 +13,50 @@ export const aeonTools:Tool[]=[
 {name:'request_purchase_approval',description:'Stop before purchase and request an explicit human decision for a single product or multi-product basket.',inputSchema:{type:'object',properties:{productId:{type:'string'},price:{type:'number'},items:{type:'array',items:{type:'object'}},reason:{type:'string'}},required:['price']},execute:async(input)=>executeObserved('request_purchase_approval',input,async()=>{const c=getMissionConstitution();const total=Number(input.price);if(total>c.budget)return blocked('CONSTITUTION_BUDGET_EXCEEDED','Purchase approval cannot be requested for a total above the mission budget.','request_purchase_approval');return {status:'approval_required',humanDecision:true,action:'purchase',...input,totalPrice:total}})}
 ]
 
-// WebMCP registration is intentionally idempotent. React StrictMode and Vite HMR can
-// execute the app bootstrap more than once during local development, while the browser
-// keeps the ModelContext registry alive. Track AEON's registrations on globalThis so a
-// second bootstrap does not attempt to register the same tool names again.
+// Chrome's current WebMCP Imperative API lives on document.modelContext.
+// Keep navigator.modelContext as a compatibility fallback for earlier preview builds.
 const WEBMCP_REGISTRY_KEY='__AEON_WEBMCP_REGISTERED_TOOLS__'
-type WebMCPGlobal=typeof globalThis & { [WEBMCP_REGISTRY_KEY]?: Set<string> }
+const WEBMCP_REGISTER_PROMISE_KEY='__AEON_WEBMCP_REGISTER_PROMISE__'
+type WebMCPGlobal=typeof globalThis & {
+  [WEBMCP_REGISTRY_KEY]?: Set<string>
+  [WEBMCP_REGISTER_PROMISE_KEY]?: Promise<boolean>
+}
 
-export function registerWebMCP(){
-  const mc=(navigator as any).modelContext
-  if(!mc?.registerTool)return false
+function getModelContext(){
+  return (document as any).modelContext ?? (navigator as any).modelContext
+}
 
+export function registerWebMCP():Promise<boolean>{
   const root=globalThis as WebMCPGlobal
-  const registered=root[WEBMCP_REGISTRY_KEY]??new Set<string>()
-  root[WEBMCP_REGISTRY_KEY]=registered
+  if(root[WEBMCP_REGISTER_PROMISE_KEY])return root[WEBMCP_REGISTER_PROMISE_KEY]!
 
-  for(const tool of aeonTools){
-    if(registered.has(tool.name))continue
-    try{
-      mc.registerTool(tool)
+  const registration=(async()=>{
+    const mc=getModelContext()
+    if(!mc?.registerTool)return false
+
+    const registered=root[WEBMCP_REGISTRY_KEY]??new Set<string>()
+    root[WEBMCP_REGISTRY_KEY]=registered
+
+    for(const tool of aeonTools){
+      if(registered.has(tool.name))continue
+      // Mark pending before awaiting so React StrictMode/HMR cannot race a second
+      // registration of the same name while Chrome is still resolving the first.
       registered.add(tool.name)
-    }catch(error){
-      const isDuplicate=error instanceof DOMException&&error.name==='InvalidStateError'&&String((error as Error).message).toLowerCase().includes('duplicate tool name')
-      if(isDuplicate){
-        registered.add(tool.name)
-        continue
+      try{
+        await mc.registerTool(tool)
+      }catch(error){
+        const message=String((error as Error)?.message??error).toLowerCase()
+        const isDuplicate=(error instanceof DOMException&&error.name==='InvalidStateError'&&message.includes('duplicate tool name'))||message.includes('duplicate tool name')
+        if(isDuplicate)continue
+        registered.delete(tool.name)
+        throw error
       }
-      throw error
     }
-  }
 
-  return true
+    return true
+  })()
+
+  root[WEBMCP_REGISTER_PROMISE_KEY]=registration
+  registration.catch(()=>{delete root[WEBMCP_REGISTER_PROMISE_KEY]})
+  return registration
 }
