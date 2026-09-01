@@ -12,4 +12,36 @@ export const aeonTools:Tool[]=[
 {name:'negotiate_offer',description:'Negotiate one or more products through the marketplace seller agent while enforcing the active constitution.',inputSchema:{type:'object',properties:{productId:{type:'string'},productIds:{type:'array',items:{type:'string'}},budget:{type:'number'}},required:[]},execute:async(input)=>executeObserved('negotiate_offer',input,async()=>{const c=getMissionConstitution();const ids:string[]=input.productIds?.length?input.productIds:[input.productId];if(!ids.length)return {status:'error',reason:'PRODUCT_REQUIRED'};if(!c.canNegotiate)return blocked('CONSTITUTION_NEGOTIATION_DISABLED','Negotiation was refused before the seller agent was contacted.','negotiate_offer');const products=ids.map(id=>searchCatalog('',c.budget).find(p=>p.id===id)).filter(Boolean) as Product[];const results=products.map(p=>{emitAgentActivity({stage:'EVALUATING',title:'Seller agent contacted',detail:`Negotiating ${p.name} · asking ₦${p.price.toLocaleString()}`,tool:'negotiate_offer'});const result=negotiate(p,c.budget,c);emitAgentActivity({stage:'ALLOWED',title:'Seller agent returned offer',detail:`${p.name} → ₦${result.acceptedPrice.toLocaleString()} · saving ₦${result.saving.toLocaleString()}`,tool:'negotiate_offer'});return result});return {status:'completed',results,total:results.reduce((s,r)=>s+r.acceptedPrice,0),saving:results.reduce((s,r)=>s+r.saving,0)}})},
 {name:'request_purchase_approval',description:'Stop before purchase and request an explicit human decision for a single product or multi-product basket.',inputSchema:{type:'object',properties:{productId:{type:'string'},price:{type:'number'},items:{type:'array',items:{type:'object'}},reason:{type:'string'}},required:['price']},execute:async(input)=>executeObserved('request_purchase_approval',input,async()=>{const c=getMissionConstitution();const total=Number(input.price);if(total>c.budget)return blocked('CONSTITUTION_BUDGET_EXCEEDED','Purchase approval cannot be requested for a total above the mission budget.','request_purchase_approval');return {status:'approval_required',humanDecision:true,action:'purchase',...input,totalPrice:total}})}
 ]
-export function registerWebMCP(){const mc=(navigator as any).modelContext;if(!mc?.registerTool)return false;for(const tool of aeonTools)mc.registerTool(tool);return true}
+
+// WebMCP registration is intentionally idempotent. React StrictMode and Vite HMR can
+// execute the app bootstrap more than once during local development, while the browser
+// keeps the ModelContext registry alive. Track AEON's registrations on globalThis so a
+// second bootstrap does not attempt to register the same tool names again.
+const WEBMCP_REGISTRY_KEY='__AEON_WEBMCP_REGISTERED_TOOLS__'
+type WebMCPGlobal=typeof globalThis & { [WEBMCP_REGISTRY_KEY]?: Set<string> }
+
+export function registerWebMCP(){
+  const mc=(navigator as any).modelContext
+  if(!mc?.registerTool)return false
+
+  const root=globalThis as WebMCPGlobal
+  const registered=root[WEBMCP_REGISTRY_KEY]??new Set<string>()
+  root[WEBMCP_REGISTRY_KEY]=registered
+
+  for(const tool of aeonTools){
+    if(registered.has(tool.name))continue
+    try{
+      mc.registerTool(tool)
+      registered.add(tool.name)
+    }catch(error){
+      const isDuplicate=error instanceof DOMException&&error.name==='InvalidStateError'&&String((error as Error).message).toLowerCase().includes('duplicate tool name')
+      if(isDuplicate){
+        registered.add(tool.name)
+        continue
+      }
+      throw error
+    }
+  }
+
+  return true
+}
