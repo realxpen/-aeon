@@ -234,6 +234,7 @@ The user-facing journey stays simple while the deeper agent activity remains ins
 git clone https://github.com/realxpen/-aeon.git
 cd ./-aeon
 npm install
+npm run build
 ```
 
 ### Start development server
