@@ -17,11 +17,12 @@ const CEILING_PRESETS = [100000, 250000, 500000, 1000000]
 const multiProductPattern = /\b(setup|kit|bundle|basket|collection|complete|full|creator setup|content setup|studio setup|multiple|several|all[- ]in[- ]one)\b/i
 const surpriseCategories:Record<string,string>={electronics:'electronics',fashion:'fashion',home:'home',gifts:'gifts'}
 
-// These are presentation holds, not state-transition triggers. The underlying
-// operation must finish first; then the active journey card gets enough time
-// to be read before the mission advances to the next stage.
-const EVALUATE_PRESENTATION_MS=2800
-const GOVERN_PRESENTATION_MS=2800
+// Presentation holds happen only after the underlying operation has completed.
+// They never decide whether a stage succeeded; they simply keep the finished
+// stage readable long enough for a human to understand the journey.
+const SEARCH_PRESENTATION_MS=3500
+const EVALUATE_PRESENTATION_MS=4000
+const GOVERN_PRESENTATION_MS=4000
 const holdForReadableStage=(ms:number)=>new Promise<void>(resolve=>window.setTimeout(resolve,ms))
 
 export default function Mission(){
@@ -63,10 +64,15 @@ export default function Mission(){
     try{
       const requirements=await executeObserved('search_products',{query:missionGoal,maxPrice:budget||null},async()=>searchMissionRequirements(missionGoal,budget||undefined));const candidates=requirements.flatMap(r=>r.products);const unique=Array.from(new Map(candidates.map(p=>[p.id,p])).values());const found=rankForMission(unique,priorities).filter(p=>!budget||p.price<=budget).slice(0,multiRequest?10:5)
       if(found.length===0){const nearest=findClosestOverBudget(missionGoal,budget);if(nearest)setProducts([nearest]);throw Object.assign(new Error('NO_MATCHING_PRODUCTS'),{code:'UNAVAILABLE'})}
+
+      // SEARCH: the marketplace search has genuinely completed at this point.
+      // Keep SEARCH visible before revealing the candidates in EVALUATE.
+      emitAgentActivity(`Search complete: ${found.length} candidate${found.length===1?'':'s'} found for the active mission.`,'search_products')
+      await holdForReadableStage(SEARCH_PRESENTATION_MS)
       setProducts(found)
 
-      // EVALUATE: perform the real comparison first, then keep the stage visible
-      // for a readable moment. The hold never decides completion; the comparison does.
+      // EVALUATE: perform the real comparison first, then keep the completed
+      // result on screen long enough for a human to read it.
       setPhase('ANALYZING')
       await executeObserved('compare_products',{productIds:found.map(p=>p.id),priorities,budget:budget||null},async()=>rankForMission(found,priorities))
       emitAgentActivity(`Evaluation complete: ${found.length} mission-fit candidate${found.length===1?'':'s'} reviewed.`,'compare_products')
@@ -84,7 +90,7 @@ export default function Mission(){
       setProposal({products:basketProducts,deals,total,saving});setPhase('CONSTITUTION CHECK')
 
       // GOVERN: the compliance decision is made before the presentation hold.
-      // This keeps governance truthful while giving the judge time to see the result.
+      // This keeps governance truthful while giving the judge time to see it.
       const compliantTotal=total<=budget||budget===0
       if(!compliantTotal)throw Object.assign(new Error('NO_COMPLIANT_DEAL'),{code:'NODEAL'})
       emitAgentActivity(`Constitution check passed: ₦${total.toLocaleString()} is within the ₦${budget.toLocaleString()} ceiling.`,'govern')
