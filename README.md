@@ -14,13 +14,15 @@ AEON explores what a human-governed **agent economy** could look like: a user gi
 
 **Direct mission page:** https://aeon-swifnatechnologyltd.vercel.app/mission/new
 
-### Vercel access note
+✅ **Public access — no AEON account or Vercel sign-in is required.**
 
-The current deployment is hosted on Vercel. If Vercel shows an authentication / deployment-protection screen before AEON opens, **sign in to Vercel and continue to the deployment**.
+Judges can open the production URL directly in a supported ChatGPT in-app browser or in Google Chrome with WebMCP testing enabled.
 
-That screen is **Vercel deployment access**, not an AEON account or product login.
+### Demo video
 
-If the hosted deployment is unavailable, AEON can also be run locally using the instructions below.
+**YouTube:** https://youtu.be/Hhz39xYT21Q
+
+The demo is under three minutes and shows the full commerce journey, human approval boundary, multi-product basket flow, and WebMCP capabilities.
 
 ---
 
@@ -139,6 +141,8 @@ Example mission:
 
 ## Option B — Google Chrome WebMCP testing
 
+AEON has been tested in Chrome with WebMCP testing enabled.
+
 1. Use a Chrome build with WebMCP testing support.
 2. Open:
 
@@ -162,6 +166,25 @@ search_products
 ```
 
 `Available Tools` confirms that Chrome discovered AEON's WebMCP capabilities.
+
+---
+
+# 🤝 What Humans + Agents Do Together
+
+Without WebMCP, an agent may have to infer actions from a visual shopping interface.
+
+With AEON, the application exposes structured commerce capabilities while the human provides the mission and authority boundaries.
+
+```text
+Human                → defines the goal and authority
+AEON mission          → coordinates the commerce workflow
+WebMCP                → exposes structured site capabilities
+Seller agents         → negotiate offers
+Constitution Firewall → checks what is allowed
+Human Approval        → controls consequential action
+```
+
+This lets the agent do more useful work without removing the human from decisions that matter.
 
 ---
 
@@ -290,6 +313,18 @@ Find me a smartphone under ₦100,000.
 ```text
 Find me a laptop under ₦800,000. Get the best value you can and ask me before purchasing.
 ```
+
+---
+
+# ✅ Challenge Readiness
+
+- ✅ Public live deployment
+- ✅ No Vercel authentication required
+- ✅ WebMCP tools discoverable in Chrome with WebMCP enabled
+- ✅ Public YouTube demo with audio and under three minutes
+- ✅ Public source repository
+- ✅ MIT open-source license
+- ✅ Judge quick-start and local run instructions included
 
 ---
 
