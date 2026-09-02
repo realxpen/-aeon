@@ -10,7 +10,7 @@ import AgentJourneyGamified from './agent-journey-gamified'
 import { initialMission, MissionState } from './agent-loop'
 import { getMissionConstitution, saveMissionConstitution, MissionConstitution, parseMissionBudget, deriveMissionPriorities } from './mission-state'
 import { emitAgentActivity } from './agent-activity'
-import { executeObserved, setActiveMissionContext, clearActiveMissionContext } from './webmcp-observability'
+import { executeObserved, setActiveMissionContext, clearActiveMissionContext, emitWebMCPTrace } from './webmcp-observability'
 import { searchMissionRequirements, rankForMission, negotiate, Product, NegotiationResult, classifyMissionInput, findClosestOverBudget } from './marketplace'
 
 const CEILING_PRESETS = [100000, 250000, 500000, 1000000]
@@ -58,6 +58,9 @@ export default function Mission(){
     const missionId=`AEON-${Date.now()}-${Math.random().toString(36).slice(2,7).toUpperCase()}`
     const activeConstitution:MissionConstitution={...constitution,goal:missionGoal,budget,canNegotiate:true,purchaseRequiresApproval:true,priorities}
     setActiveMissionContext({id:missionId,goal:missionGoal,budget,canNegotiate:true,purchaseRequiresApproval:true})
+    const missionTraceInput={missionId,goal:missionGoal,budget,canNegotiate:true,purchaseRequiresApproval:true,priorities}
+    emitWebMCPTrace({tool:'create_mission',phase:'CALL',input:missionTraceInput})
+    emitWebMCPTrace({tool:'create_mission',phase:'RESULT',input:missionTraceInput,output:{status:'mission_created',missionId,budget,canNegotiate:true,purchaseRequiresApproval:true}})
     setConstitution(activeConstitution);setMission(initialMission());setProposal(null);setProducts([]);setError('');setInputIssue('');setRunning(true);setApproved(false);setPhase('SEARCHING')
     emitAgentActivity(`Mission accepted: “${missionGoal}” · ceiling ${budget?`₦${budget.toLocaleString()}`:'none'}`,'Mission engine')
     const multiRequest=multiProductPattern.test(missionGoal)
@@ -89,13 +92,20 @@ export default function Mission(){
       const basketProducts=multiRequest?selected.map(x=>x.product):[selected[0].product];const deals=multiRequest?selected.map(x=>x.deal):[selected[0].deal];const total=deals.reduce((s,d)=>s+d.acceptedPrice,0);const saving=deals.reduce((s,d)=>s+d.saving,0);if(budget>0&&total>budget)throw Object.assign(new Error('NO_COMPLIANT_DEAL'),{code:'NODEAL'})
       setProposal({products:basketProducts,deals,total,saving});setPhase('CONSTITUTION CHECK')
 
-      // GOVERN: the compliance decision is made before the presentation hold.
-      // This keeps governance truthful while giving the judge time to see it.
+      // GOVERN: this trace records the real compliance decision, not a timer.
+      const governanceInput={missionId,goal:missionGoal,originalCeiling:budget,authorizedCeiling:budget,proposedTotal:total,remainingAuthority:Math.max(0,budget-total),canNegotiate:activeConstitution.canNegotiate,purchaseRequiresApproval:activeConstitution.purchaseRequiresApproval}
+      emitWebMCPTrace({tool:'govern_mission',phase:'CALL',input:governanceInput})
       const compliantTotal=total<=budget||budget===0
       if(!compliantTotal)throw Object.assign(new Error('NO_COMPLIANT_DEAL'),{code:'NODEAL'})
+      emitWebMCPTrace({tool:'govern_mission',phase:'RESULT',input:governanceInput,output:{status:'passed',withinCeiling:true,proposedTotal:total,authorizedCeiling:budget,remainingAuthority:Math.max(0,budget-total)}})
       emitAgentActivity(`Constitution check passed: ₦${total.toLocaleString()} is within the ₦${budget.toLocaleString()} ceiling.`,'govern')
       await holdForReadableStage(GOVERN_PRESENTATION_MS)
-      setPhase('HUMAN APPROVAL');setRunning(false);emitAgentActivity('Purchase blocked: human approval required','request_purchase_approval')
+
+      setPhase('HUMAN APPROVAL');setRunning(false)
+      const approvalInput={missionId,action:'purchase',items:basketProducts.map((product,index)=>({productId:product.id,product:product.name,merchant:product.merchant,listedPrice:product.price,negotiatedPrice:deals[index]?.acceptedPrice??product.price})),totalPrice:total,authorizedCeiling:budget,purchaseRequiresApproval:true}
+      emitWebMCPTrace({tool:'request_purchase_approval',phase:'CALL',input:approvalInput})
+      emitWebMCPTrace({tool:'request_purchase_approval',phase:'RESULT',input:approvalInput,output:{status:'approval_required',requiresHumanApproval:true,action:'purchase',totalPrice:total,authorizedCeiling:budget,items:approvalInput.items}})
+      emitAgentActivity('Purchase blocked: human approval required','request_purchase_approval')
     }catch(e){const failure=e as Error & {code?:string};setError(failure.message||'Mission failed');setRunning(false);if(failure.code==='UNAVAILABLE'||failure.message==='NO_MATCHING_PRODUCTS'){setInputIssue('unavailable');setPhase('NO MATCHING PRODUCTS')}else{setInputIssue('noDeal');setPhase('NO COMPLIANT DEAL')}}
   }
   const chooseSurpriseCategory=async(category:string)=>{
